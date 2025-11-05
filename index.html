@@ -236,7 +236,7 @@ function loadCSVFile(file){
     try{
       const text=e.target.result;
       const first=text.split('\n')[0];
-      const sep=first.includes(';')?';':',';
+      const sep=first && first.includes(';')?';':',';
       const lines=text.split('\n').filter(l=>l.trim());
       const rows=lines.map(line=>{
         const row=[]; let cur=''; let q=false;
@@ -266,13 +266,70 @@ function parseCSVValue(v){
   return (!isNaN(n) && n.trim()!=='') ? parseFloat(n) : v;
 }
 
-/* ---------- Helpers ---------- */
+/* ---------- Helpers (dates / montants / détection astreinte) ---------- */
 function parseMoney(val){
   if(val===null||val===undefined) return 0;
   if(typeof val==='number') return val;
   const s=String(val).replace(/\s/g,'').replace('€','').replace(',','.');
   const m=s.match(/-?\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : 0;
+}
+
+function tryParseDateFromString(s){
+  if(!s) return null;
+  s=String(s).trim();
+  const m1=s.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  const m2=s.match(/\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
+  if(m1){
+    let [_,d,mo,y]=m1; if(y.length===2) y='20'+y;
+    return `${d.padStart(2,'0')}/${mo.padStart(2,'0')}/${y}`;
+  }
+  if(m2){
+    const [_,y,mo,d]=m2;
+    return `${String(d).padStart(2,'0')}/${String(mo).padStart(2,'0')}/${y}`;
+  }
+  return null;
+}
+
+function findDateInRow(row, dateColIndex){
+  if(dateColIndex!==-1 && row[dateColIndex]){
+    const f=formatDate(row[dateColIndex]);
+    if(f) return f;
+  }
+  for(let j=0;j<row.length;j++){
+    const f=tryParseDateFromString(row[j]);
+    if(f) return f;
+  }
+  return null;
+}
+
+function rowContainsAstreinte(row){
+  return row.some(c => typeof c === 'string' &&
+    /(astreinte|pr[dnm]\b|mi\s*nuit\s*prm)/i.test(c)
+  );
+}
+
+// priorité de colonnes: RO > RC > montant/total/forfait > payé/brut/net
+function findAmountInRow(row, headerRow){
+  const order=[
+    /^(ro)\s*:?$/i, /^(rc)\s*:?$/i,
+    /montant|total|forfait/i,
+    /pay|brut|net/i
+  ];
+  if(headerRow && Array.isArray(headerRow)){
+    for(const rx of order){
+      const idxList=[];
+      headerRow.forEach((h,idx)=>{ if(typeof h==='string' && rx.test(h)) idxList.push(idx); });
+      if(idxList.length){
+        const vals=idxList.map(i=>parseMoney(row[i])).filter(v=>!isNaN(v) && v!==0);
+        if(vals.length) return vals.sort((a,b)=>Math.abs(b)-Math.abs(a))[0];
+      }
+    }
+  }
+  // fallback: plus grand nombre trouvé dans la ligne
+  let best=0;
+  row.forEach(c=>{ const n=parseMoney(c); if(!isNaN(n) && Math.abs(n)>Math.abs(best)) best=n; });
+  return best||0;
 }
 
 function formatDate(val){
@@ -312,31 +369,27 @@ function getTarifs(){
   };
 }
 
-/* ---------- Parsing mixte (actes + paiements CPAM astreintes) ---------- */
+/* ---------- Parsing mixte (actes + paiements CPAM astreintes PRD/PRN/PRM) ---------- */
 function parseExcelData(data,fileName){
   debugLog(`🔍 Parsing ${fileName}...`);
   const tarifs=getTarifs();
 
-  // 1) repérage en-tête
+  // 1) en-tête
   let headerRow=null, headerIndex=-1;
   for(let i=0;i<Math.min(10,data.length);i++){
     const row=data[i];
     if(row && row.length>0){
-      const hasDate=row.some(c=>c && typeof c==='string' && c.toLowerCase().includes('date'));
+      const hasDate=row.some(c=>c && typeof c==='string' && /date/i.test(c));
       if(hasDate){ headerRow=row; headerIndex=i; break; }
     }
   }
   if(!headerRow){ headerIndex=0; headerRow=data[0]||[]; }
 
-  // 2) colonnes utiles
-  let dateCol=-1, montantCol=-1, libelleCol=-1;
+  // 2) colonne date (souvent "Date de paiement")
+  let dateCol=-1;
   for(let j=0;j<headerRow.length;j++){
     const cell=headerRow[j];
-    if(!cell || typeof cell!=='string') continue;
-    const u=cell.toLowerCase();
-    if(u.includes('date')) dateCol=j;
-    if(montantCol===-1 && (u.includes('montant')||u.includes('total')||u.includes('forfait'))) montantCol=j;
-    if(libelleCol===-1 && (u.includes('libell')||u.includes('objet')||u.includes('prestation')||u.includes('nature'))) libelleCol=j;
+    if(typeof cell==='string' && /date/i.test(cell)){ dateCol=j; break; }
   }
 
   const codes=['CRN','CRM','CRD','VRN','VRM','VRD'];
@@ -346,29 +399,31 @@ function parseExcelData(data,fileName){
   };
 
   const dateGroups={};
+  let astreinteLines=0;
 
   for(let i=headerIndex+1;i<data.length;i++){
     const row=data[i];
     if(!row || row.length===0) continue;
 
-    // date
-    let date=null;
-    if(dateCol!==-1 && row[dateCol]) date=formatDate(row[dateCol]);
+    // date (prend "Date de paiement" si présent, sinon toute date trouvée)
+    let date=findDateInRow(row, dateCol);
     if(!date) date=`Jour ${i-headerIndex}`;
 
     if(!dateGroups[date]){
       dateGroups[date]={date, source:fileName, codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, forfait:0};
     }
 
-    // lignes "astreinte" → forfait CPAM (paiement)
-    let lib = (libelleCol !== -1 && row[libelleCol]) ? String(row[libelleCol]).toLowerCase() : '';
-    const isAstreinteRow = /astreinte/.test(lib) || /astreintes/.test(lib) || /astreinte de/.test(lib);
-    if(isAstreinteRow && montantCol!==-1 && row[montantCol]!==undefined && row[montantCol]!==null){
-      const montant=parseMoney(row[montantCol]);
-      if(!isNaN(montant) && montant!==0){ dateGroups[date].forfait += montant; }
+    // Lignes astreinte (ASTREINTE J FERIE PRD / NUIT PRN / MI NUIT PRM, etc.)
+    if(rowContainsAstreinte(row)){
+      const montant=findAmountInRow(row, headerRow);
+      if(!isNaN(montant) && montant!==0){
+        dateGroups[date].forfait += montant;
+        astreinteLines++;
+        debugLog(`➕ Astreinte PR* détectée @ ${date} : ${montant}€ (${fileName})`);
+      }
     }
 
-    // comptage des codes d'actes/majorations
+    // Comptage des codes CR*/VR* (si tes exports d'actes sont mélangés)
     for(let j=0;j<row.length;j++){
       if(j===dateCol) continue;
       const cell=row[j]; if(!cell) continue;
@@ -380,7 +435,7 @@ function parseExcelData(data,fileName){
     }
   }
 
-  // 3) conversion → jours
+  // 3) dictionnaire → tableau de jours
   const gardes=[];
   for(const d in dateGroups){
     const g=dateGroups[d];
@@ -393,17 +448,18 @@ function parseExcelData(data,fileName){
         details.push(`${n}×${c}(${tarifs[c]||0}€)`);
       }
     }
-    const totalJour = Math.round((g.forfait + totalCodes) * 100) / 100;
+    const totalJour=Math.round((g.forfait + totalCodes)*100)/100;
     if(totalJour>0 || g.forfait!==0){
       gardes.push({
         date:g.date, source:g.source, codeCounts:{...g.codeCounts},
         nbActes, forfait:Math.round(g.forfait*100)/100,
         majorations:totalCodes, totalJour,
-        details:[...details, (g.forfait?`Forfait:${g.forfait}€`:null)].filter(Boolean).join(' + ')
+        details:[...details,(g.forfait?`Forfait:${g.forfait}€`:null)].filter(Boolean).join(' + ')
       });
     }
   }
-  debugLog(`✅ ${gardes.length} JOURS extraits (incl. forfaits CPAM si trouvés)`);
+
+  debugLog(`✅ ${gardes.length} jours extraits • ${astreinteLines} ligne(s) d’astreinte PRD/PRN/PRM détectée(s)`);
   return gardes;
 }
 
@@ -464,7 +520,7 @@ function analyseData(){
   });
   const totalCodesCount=Object.values(totals).reduce((s,c)=>s+c,0);
 
-  // Stats UI
+  // Stats
   document.getElementById('statNbJours').textContent=nbJours;
   document.getElementById('statFactures').textContent=totalCodesCount;
   document.getElementById('statFacturesCodes').textContent=
@@ -506,22 +562,21 @@ function updateTable(gardes, topN){
   tbody.innerHTML=html;
 }
 
-/* ---------- Exemple et export ---------- */
+/* ---------- Exemple & Export ---------- */
 function loadExample(){
-  const ex=[]; 
-  const dates=['15/01','22/01','28/01','05/02','12/02','18/02','25/02','03/03','10/03'];
-  const codes=['CRN','CRM','CRD','VRN','VRM','VRD']; const tarifs=getTarifs();
-  for(let i=0;i<70;i++){
-    const d=`${dates[i%dates.length]}/2025`;
-    const n=1+Math.floor(Math.random()*5);
-    const cc={CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0};
-    for(let j=0;j<n;j++){ cc[codes[Math.floor(Math.random()*codes.length)]]++; }
-    let total=0, nb=0; for(const c of codes){ total += cc[c]*tarifs[c]; nb += cc[c]; }
-    const forfait = (i%7===0)? 80 : 0; // simulate CPAM forfait some days
-    ex.push({date:d, source:'Exemple.csv', codeCounts:{...cc}, nbActes:nb, forfait, majorations:total, totalJour:Math.round((total+forfait)*100)/100});
-  }
+  const ex=[];
+  const dates=['10/08/2025','11/08/2025','12/08/2025','16/08/2025','17/08/2025','20/08/2025','21/08/2025','25/08/2025','26/08/2025'];
+  const tarifs=getTarifs();
+  // Simule des lignes CPAM ASTREINTE PRN/PRM/PRD (RO: 60/120/180€)
+  dates.forEach((d,idx)=>{
+    const ro=[180,60,60,120,240,120,60,60,60][idx];
+    ex.push({date:d, source:'CPAM_Aout.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:ro, majorations:0, totalJour:ro});
+  });
+  // Ajoute quelques actes un autre jour
+  ex.push({date:'15/08/2025', source:'Actes.xlsx', codeCounts:{CRN:2,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:3, forfait:0,
+           majorations:2*tarifs.CRN+1*tarifs.CRM, totalJour:Math.round((2*tarifs.CRN+1*tarifs.CRM)*100)/100});
   allGardes=ex;
-  loadedFiles=[{name:'Exemple.csv', nbGardes:ex.length, totalMontant:ex.reduce((s,g)=>s+g.totalJour,0)}];
+  loadedFiles=[{name:'Exemple', nbGardes:ex.length, totalMontant:ex.reduce((s,g)=>s+g.totalJour,0)}];
   updateFileList(); analyseData();
 }
 
