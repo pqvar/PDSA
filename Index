@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculateur PDSA - Exonération Fiscale Art. 151 ter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;
+            background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+            min-height:100vh; padding:20px;
+        }
+        .container{max-width:1400px;margin:0 auto;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;}
+        .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:30px;text-align:center;}
+        .header h1{font-size:2em;margin-bottom:10px;}
+        .header p{opacity:0.9;font-size:1.1em;}
+        .content{padding:30px;}
+        .section{background:#f8f9fa;border-radius:12px;padding:25px;margin-bottom:25px;border:2px solid #e9ecef;}
+        .section-title{font-size:1.3em;color:#667eea;margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+        .section-title::before{content:'';width:4px;height:24px;background:#667eea;border-radius:2px;}
+        .upload-zone{border:3px dashed #667eea;border-radius:12px;padding:40px;text-align:center;background:white;cursor:pointer;transition:all 0.3s;margin-bottom:20px;}
+        .upload-zone:hover{border-color:#764ba2;background:#f8f9fa;}
+        .upload-zone.dragover{background:#e7f3ff;border-color:#0066cc;}
+        .file-input{display:none;}
+        .upload-icon{font-size:3em;color:#667eea;margin-bottom:15px;}
+        .file-list{background:white;border-radius:8px;padding:15px;margin-top:15px;}
+        .file-item{background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+        .file-info{flex:1;}
+        .file-name{font-weight:600;color:#856404;}
+        .file-stats{font-size:0.9em;color:#856404;margin-top:5px;}
+        .btn-remove{background:#dc3545;color:white;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;font-weight:600;transition:all 0.3s;}
+        .btn-remove:hover{background:#c82333;transform:scale(1.05);}
+        .total-summary{background:#d4edda;border:2px solid #28a745;border-radius:8px;padding:15px;text-align:center;font-size:1.2em;font-weight:600;color:#155724;margin-top:15px;}
+        .tarifs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px;margin-top:15px;}
+        .tarif-input{display:flex;flex-direction:column;}
+        .tarif-label{font-weight:600;color:#495057;margin-bottom:5px;font-size:0.9em;}
+        .tarif-field{padding:10px;border:2px solid #dee2e6;border-radius:6px;font-size:1em;text-align:center;font-weight:600;}
+        .tarif-field:focus{outline:none;border-color:#667eea;}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;margin-top:20px;}
+        .stat-card{background:white;border-radius:12px;padding:20px;text-align:center;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:transform 0.3s;}
+        .stat-card:hover{transform:translateY(-5px);}
+        .stat-card.blue{border-top:4px solid #3498db;}
+        .stat-card.green{border-top:4px solid #2ecc71;}
+        .stat-card.purple{border-top:4px solid #9b59b6;}
+        .stat-card.orange{border-top:4px solid #f39c12;}
+        .stat-card.cyan{border-top:4px solid #1abc9c;}
+        .stat-card.indigo{border-top:4px solid #667eea;}
+        .stat-card.teal{border-top:4px solid #20c997;}
+        .stat-card.red{border-top:4px solid #e74c3c;}
+        .stat-label{font-size:0.9em;color:#6c757d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+        .stat-value{font-size:2em;font-weight:700;color:#212529;}
+        .stat-subtext{font-size:0.85em;color:#6c757d;margin-top:5px;}
+        .btn-group{display:flex;gap:15px;flex-wrap:wrap;margin-top:20px;}
+        .btn{padding:12px 24px;border:none;border-radius:8px;font-weight:600;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;gap:8px;font-size:1em;}
+        .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.2);}
+        .btn-primary{background:#667eea;color:white;}
+        .btn-success{background:#28a745;color:white;}
+        .btn-info{background:#17a2b8;color:white;}
+        .btn-warning{background:#ffc107;color:#212529;}
+        .table-container{overflow-x:auto;margin-top:20px;background:white;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}
+        table{width:100%;border-collapse:collapse;}
+        th,td{padding:12px;text-align:left;border-bottom:1px solid #dee2e6;}
+        th{background:#667eea;color:white;font-weight:600;position:sticky;top:0;}
+        tr:hover{background:#f8f9fa;}
+        .highlight-row{background:#d4edda !important;font-weight:600;}
+        @media (max-width:768px){
+            .tarifs-grid{grid-template-columns:repeat(2,1fr);}
+            .stats-grid{grid-template-columns:1fr;}
+            .btn-group{flex-direction:column;}
+            .btn{width:100%;justify-content:center;}
+        }
+        .alert{padding:15px;border-radius:8px;margin-bottom:20px;}
+        .alert-info{background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;}
+        .alert-warning{background:#fff3cd;border:1px solid #ffeaa7;color:#856404;}
+        .debug-panel{background:#f0f0f0;border:1px solid #ccc;border-radius:8px;padding:15px;margin-top:20px;font-family:'Courier New',monospace;font-size:0.9em;}
+        .debug-title{font-weight:600;margin-bottom:10px;color:#333;}
+        .debug-log{max-height:200px;overflow-y:auto;background:white;padding:10px;border-radius:4px;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🏥 Calculateur PDSA</h1>
+        <p>Exonération Fiscale - Article 151 ter CGI - Zone ZIP</p>
+    </div>
+
+    <div class="content">
+        <!-- Upload -->
+        <div class="section">
+            <div class="section-title">📂 Fichiers de gardes chargés</div>
+
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📤</div>
+                <h3>Glissez-déposez vos fichiers Excel ou CSV ici</h3>
+                <p style="color:#6c757d;margin-top:10px;">ou cliquez pour sélectionner (.xlsx, .xls, .csv)</p>
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv" multiple>
+            </div>
+
+            <div id="fileList"></div>
+            <div id="totalSummary"></div>
+        </div>
+
+        <!-- Tarifs -->
+        <div class="section">
+            <div class="section-title">💰 Configuration des tarifs</div>
+            <div class="tarifs-grid">
+                <div class="tarif-input"><label class="tarif-label">CRN</label><input type="number" id="tarifCRN" class="tarif-field" value="42.5" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">CRM</label><input type="number" id="tarifCRM" class="tarif-field" value="51.5" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">CRD</label><input type="number" id="tarifCRD" class="tarif-field" value="26.5" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">VRN</label><input type="number" id="tarifVRN" class="tarif-field" value="46" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">VRM</label><input type="number" id="tarifVRM" class="tarif-field" value="55" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">VRD</label><input type="number" id="tarifVRD" class="tarif-field" value="30" step="0.5"></div>
+                <div class="tarif-input"><label class="tarif-label">Top N (jours)</label><input type="number" id="topN" class="tarif-field" value="60" min="1" max="365"></div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="analyseData()">🔍 Analyser</button>
+                <button class="btn btn-success" onclick="loadExample()">📊 Charger un exemple</button>
+                <button class="btn btn-info" onclick="exportToExcel()">📁 Exporter Excel</button>
+                <button class="btn btn-warning" onclick="toggleDebug()">🐛 Debug</button>
+            </div>
+
+            <div id="debugPanel" class="debug-panel" style="display:none;">
+                <div class="debug-title">🐛 Console de Debug</div>
+                <div class="debug-log" id="debugLog"></div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="section">
+            <div class="section-title">📊 Statistiques globales</div>
+            <div class="stats-grid">
+                <div class="stat-card blue"><div class="stat-label">Nombre de jours</div><div class="stat-value" id="statNbJours">0</div></div>
+                <div class="stat-card green"><div class="stat-label">Total actes</div><div class="stat-value" id="statFactures">0</div><div class="stat-subtext" id="statFacturesCodes"></div></div>
+                <div class="stat-card purple"><div class="stat-label">Codes CR (N+M+D)</div><div class="stat-value" id="statCotations">0</div></div>
+                <div class="stat-card orange"><div class="stat-label">Codes VR (N+M+D)</div><div class="stat-value" id="statGardes">0</div></div>
+                <div class="stat-card cyan"><div class="stat-label">Total combiné</div><div class="stat-value" id="statCombine">0 €</div></div>
+                <div class="stat-card indigo"><div class="stat-label">TOP N</div><div class="stat-value" id="statTop60">0 €</div><div class="stat-subtext" id="statTop60Moy"></div></div>
+                <div class="stat-card teal"><div class="stat-label">Exonération possible (TOP N)</div><div class="stat-value" id="statExon">0 €</div></div>
+                <div class="stat-card red"><div class="stat-label">Reste imposable (hors TOP N)</div><div class="stat-value" id="statHorsTop">0 €</div></div>
+            </div>
+        </div>
+
+        <!-- Tableau -->
+        <div class="section">
+            <div class="section-title">📋 Détail des gardes</div>
+            <div class="alert alert-info">💡 Les <span id="lblTopN">60</span> premiers jours (les plus rémunérateurs) sont surlignés en vert</div>
+            <div class="table-container">
+                <table id="detailTable">
+                    <thead>
+                    <tr>
+                        <th>Rang</th><th>Date</th><th>Source</th><th>Nb actes</th>
+                        <th>CRN</th><th>CRM</th><th>CRD</th>
+                        <th>VRN</th><th>VRM</th><th>VRD</th>
+                        <th>Total Jour</th><th>Cumul</th><th>Dans TOP N</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    <tr><td colspan="13" style="text-align:center;padding:40px;color:#6c757d;">Chargez vos fichiers Excel ou CSV pour voir les détails</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allGardes = [];
+let loadedFiles = [];
+let debugMode = false;
+
+function debugLog(message){
+    console.log(message);
+    if(debugMode){
+        const debugLogEl=document.getElementById('debugLog');
+        const timestamp=new Date().toLocaleTimeString();
+        debugLogEl.innerHTML += `[${timestamp}] ${message}<br>`;
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+    }
+}
+function toggleDebug(){
+    debugMode=!debugMode;
+    const panel=document.getElementById('debugPanel');
+    panel.style.display = debugMode ? 'block':'none';
+    if(debugMode){ document.getElementById('debugLog').innerHTML='📝 Mode debug activé<br>'; }
+}
+
+// Drag & drop
+const uploadZone=document.getElementById('uploadZone');
+const fileInput=document.getElementById('fileInput');
+uploadZone.addEventListener('click',()=>fileInput.click());
+uploadZone.addEventListener('dragover',(e)=>{e.preventDefault();uploadZone.classList.add('dragover');});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop',(e)=>{
+    e.preventDefault();uploadZone.classList.remove('dragover');
+    const files=Array.from(e.dataTransfer.files);
+    debugLog(`📤 ${files.length} fichier(s) déposé(s)`);
+    files.forEach(file=>{
+        if(/\.(xlsx|xls)$/i.test(file.name)) loadExcelFile(file);
+        else if(/\.csv$/i.test(file.name)) loadCSVFile(file);
+        else debugLog(`❌ Fichier ignoré (format non supporté): ${file.name}`);
+    });
+});
+fileInput.addEventListener('change',(e)=>{
+    const files=Array.from(e.target.files);
+    debugLog(`📂 ${files.length} fichier(s) sélectionné(s)`);
+    files.forEach(file=>{
+        if(/\.(xlsx|xls)$/i.test(file.name)) loadExcelFile(file);
+        else if(/\.csv$/i.test(file.name)) loadCSVFile(file);
+    });
+    e.target.value='';
+});
+
+function loadExcelFile(file){
+    debugLog(`📖 Lecture du fichier: ${file.name}`);
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+        try{
+            const data=new Uint8Array(e.target.result);
+            const workbook=XLSX.read(data,{type:'array'});
+            debugLog(`✅ Workbook chargé: ${workbook.SheetNames.length} feuille(s)`);
+            const firstSheet=workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData=XLSX.utils.sheet_to_json(firstSheet,{header:1});
+            debugLog(`📊 ${jsonData.length} lignes trouvées`);
+            const gardes=parseExcelData(jsonData,file.name);
+            debugLog(`✅ ${gardes.length} gardes extraites`);
+            loadedFiles.push({
+                name:file.name,
+                nbGardes:gardes.length,
+                totalMontant:gardes.reduce((s,g)=>s+g.totalJour,0)
+            });
+            allGardes=allGardes.concat(gardes);
+            updateFileList();
+            analyseData();
+        }catch(error){
+            debugLog(`❌ ERREUR: ${error.message}`);
+            alert(`Erreur lors de la lecture du fichier ${file.name}: ${error.message}`);
+        }
+    };
+    reader.onerror=(error)=>debugLog(`❌ Erreur de lecture: ${error}`);
+    reader.readAsArrayBuffer(file);
+}
+
+function loadCSVFile(file){
+    debugLog(`📖 Lecture du fichier CSV: ${file.name}`);
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+        try{
+            const text=e.target.result;
+            debugLog(`✅ Fichier CSV chargé: ${text.length} caractères`);
+            const firstLine=text.split('\n')[0];
+            const separator=firstLine.includes(';')?';':',';
+            debugLog(`🔍 Séparateur détecté: "${separator}"`);
+            const lines=text.split('\n').filter(line=>line.trim());
+            const jsonData=lines.map(line=>{
+                const row=[]; let cur=''; let inQuotes=false;
+                for(let i=0;i<line.length;i++){
+                    const ch=line[i];
+                    if(ch==='"'){ inQuotes=!inQuotes; }
+                    else if(ch===separator && !inQuotes){ row.push(parseCSVValue(cur.trim())); cur=''; }
+                    else{ cur+=ch; }
+                }
+                row.push(parseCSVValue(cur.trim()));
+                return row;
+            });
+            debugLog(`📊 ${jsonData.length} lignes CSV parsées`);
+            const gardes=parseExcelData(jsonData,file.name);
+            debugLog(`✅ ${gardes.length} gardes extraites du CSV`);
+            loadedFiles.push({
+                name:file.name,
+                nbGardes:gardes.length,
+                totalMontant:gardes.reduce((s,g)=>s+g.totalJour,0)
+            });
+            allGardes=allGardes.concat(gardes);
+            updateFileList();
+            analyseData();
+        }catch(error){
+            debugLog(`❌ ERREUR CSV: ${error.message}`);
+            alert(`Erreur lors de la lecture du fichier CSV ${file.name}: ${error.message}`);
+        }
+    };
+    reader.onerror=(error)=>debugLog(`❌ Erreur de lecture CSV: ${error}`);
+    reader.readAsText(file,'UTF-8');
+}
+
+function parseCSVValue(value){
+    value=value.replace(/^"(.*)"$/,'$1');
+    if(value==='') return null;
+    const numberValue=value.replace(',','.');
+    if(!isNaN(numberValue) && numberValue.trim()!=='') return parseFloat(numberValue);
+    return value;
+}
+
+function parseExcelData(data,fileName){
+    debugLog(`🔍 Parsing ${fileName}...`);
+    const tarifs=getTarifs();
+
+    // Chercher une ligne d'en-tête contenant "date"
+    let headerRow=null, headerIndex=-1;
+    for(let i=0;i<Math.min(10,data.length);i++){
+        const row=data[i];
+        if(row && row.length>0){
+            const hasDate=row.some(cell=>cell && typeof cell==='string' && cell.toLowerCase().includes('date'));
+            if(hasDate){ headerRow=row; headerIndex=i; debugLog(`✅ En-tête trouvé à la ligne ${i+1}`); break; }
+        }
+    }
+    if(!headerRow){ headerIndex=0; headerRow=data[0]||[]; debugLog(`⚠️ Pas d'en-tête net, parsing brut`); }
+
+    // Position de la date (si identifiable)
+    let dateCol=-1;
+    for(let j=0;j<headerRow.length;j++){
+        const cell=headerRow[j];
+        if(cell && typeof cell==='string' && cell.toUpperCase().includes('DATE')){ dateCol=j; debugLog(`📅 Colonne Date: ${j}`); break; }
+    }
+
+    const codes=['CRN','CRM','CRD','VRN','VRM','VRD'];
+    const regexMap={
+        CRN:/(?<![A-Z])CRN(?![A-Z])/g,
+        CRM:/(?<![A-Z])CRM(?![A-Z])/g,
+        CRD:/(?<![A-Z])CRD(?![A-Z])/g,
+        VRN:/(?<![A-Z])VRN(?![A-Z])/g,
+        VRM:/(?<![A-Z])VRM(?![A-Z])/g,
+        VRD:/(?<![A-Z])VRD(?![A-Z])/g,
+    };
+
+    const dateGroups={};
+    let linesParsed=0, linesWithCodes=0;
+
+    for(let i=headerIndex+1;i<data.length;i++){
+        const row=data[i];
+        if(!row || row.length===0) continue;
+        linesParsed++;
+
+        // Date
+        let date=null;
+        if(dateCol!==-1 && row[dateCol]) date=formatDate(row[dateCol]);
+        if(!date) date=`Jour ${i-headerIndex}`;
+
+        if(linesParsed<=5){ debugLog(`  Ligne ${linesParsed}: date brute="${row[dateCol]}" → "${date}"`); }
+
+        // Init jour
+        if(!dateGroups[date]){
+            dateGroups[date]={ date, source:fileName, codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0} };
+        }
+
+        // Parcourir cellules et compter occurrences de chaque code (robuste)
+        let found=false;
+        for(let j=0;j<row.length;j++){
+            if(j===dateCol) continue;
+            const cell=row[j];
+            if(!cell) continue;
+            const cellStr=String(cell).toUpperCase();
+            for(const code of codes){
+                const re=regexMap[code];
+                const matches=cellStr.match(re);
+                if(matches && matches.length>0){
+                    dateGroups[date].codeCounts[code]+=matches.length;
+                    found=true;
+                }
+            }
+        }
+        if(found) linesWithCodes++;
+    }
+
+    debugLog(`📊 ${linesParsed} lignes parsées, ${linesWithCodes} avec des codes`);
+    debugLog(`📅 ${Object.keys(dateGroups).length} dates uniques`);
+
+    // Construire les jours
+    const gardes=[];
+    for(const d in dateGroups){
+        const g=dateGroups[d];
+        let totalJour=0, nbActes=0, details=[];
+        for(const code of codes){
+            const n=g.codeCounts[code]||0;
+            if(n>0){
+                totalJour += n * (tarifs[code]||0);
+                nbActes += n;
+                details.push(`${n}×${code}(${(tarifs[code]||0)}€)`);
+            }
+        }
+        if(totalJour>0){
+            gardes.push({
+                date:g.date,
+                source:g.source,
+                codeCounts:{...g.codeCounts},
+                nbActes,
+                forfait:0,
+                majorations:totalJour,
+                totalJour:Math.round(totalJour*100)/100,
+                details:details.join(' + ')
+            });
+        }
+    }
+    debugLog(`✅ ${gardes.length} JOURS extraits`);
+    gardes.slice(0,3).forEach(ga=>debugLog(`  → ${ga.date}: ${ga.nbActes} actes - ${ga.details} = ${ga.totalJour}€`));
+    return gardes;
+}
+
+function formatDate(val){
+    if(!val) return null;
+    if(typeof val==='string'){
+        let s=val.trim().replace(/[^\d\/\-\s:]/g,'').split(' ')[0];
+        let d,m,y;
+        if(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(s)){
+            const p=s.split(/[\/\-]/); d=p[0].padStart(2,'0'); m=p[1].padStart(2,'0'); y=p[2];
+        }else if(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2}$/.test(s)){
+            const p=s.split(/[\/\-]/); d=p[0].padStart(2,'0'); m=p[1].padStart(2,'0'); y='20'+p[2];
+        }else if(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(s)){
+            const p=s.split(/[\/\-]/); y=p[0]; m=p[1].padStart(2,'0'); d=p[2].padStart(2,'0');
+        }else{ return s; }
+        return `${d}/${m}/${y}`;
+    }
+    if(typeof val==='number'){
+        try{
+            const dt=XLSX.SSF.parse_date_code(val);
+            return `${String(dt.d).padStart(2,'0')}/${String(dt.m).padStart(2,'0')}/${dt.y}`;
+        }catch(e){ debugLog(`⚠️ Excel date invalide: ${val}`); return null; }
+    }
+    return null;
+}
+
+function getTarifs(){
+    return {
+        CRN:parseFloat(document.getElementById('tarifCRN').value),
+        CRM:parseFloat(document.getElementById('tarifCRM').value),
+        CRD:parseFloat(document.getElementById('tarifCRD').value),
+        VRN:parseFloat(document.getElementById('tarifVRN').value),
+        VRM:parseFloat(document.getElementById('tarifVRM').value),
+        VRD:parseFloat(document.getElementById('tarifVRD').value),
+    };
+}
+
+function updateFileList(){
+    const fileListDiv=document.getElementById('fileList');
+    if(loadedFiles.length===0){ fileListDiv.innerHTML=''; document.getElementById('totalSummary').innerHTML=''; return; }
+    let html='<div class="file-list">';
+    loadedFiles.forEach((f,i)=>{
+        html+=`<div class="file-item">
+            <div class="file-info">
+                <div class="file-name">📄 ${f.name}</div>
+                <div class="file-stats">${f.nbGardes} gardes • ${f.totalMontant.toFixed(2)}€</div>
+            </div>
+            <button class="btn-remove" onclick="removeFile(${i})">🗑️ Retirer</button>
+        </div>`;
+    });
+    html+='</div>';
+    fileListDiv.innerHTML=html;
+
+    const totalGardes=loadedFiles.reduce((s,f)=>s+f.nbGardes,0);
+    const totalMontant=loadedFiles.reduce((s,f)=>s+f.totalMontant,0);
+    document.getElementById('totalSummary').innerHTML=
+        `<div class="total-summary">✅ Total: ${totalGardes} gardes • ${totalMontant.toFixed(2)}€</div>`;
+}
+
+function removeFile(index){
+    const removed=loadedFiles[index];
+    debugLog(`🗑️ Suppression de ${removed.name}`);
+    allGardes=allGardes.filter(g=>g.source!==removed.name);
+    loadedFiles.splice(index,1);
+    updateFileList();
+    analyseData();
+}
+
+function analyseData(){
+    debugLog(`📊 Analyse des données...`);
+    const tbody=document.getElementById('tableBody');
+    if(allGardes.length===0){
+        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:#6c757d;">Aucune donnée</td></tr>`;
+        ['statNbJours','statFactures','statCotations','statGardes','statCombine','statTop60','statTop60Moy','statExon','statHorsTop'].forEach(id=>document.getElementById(id).textContent='0');
+        return;
+    }
+    const sorted=[...allGardes].sort((a,b)=>b.totalJour-a.totalJour);
+    const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
+    document.getElementById('lblTopN').textContent=topN;
+
+    const nbJours=sorted.length;
+    const totalCombine=sorted.reduce((s,g)=>s+g.totalJour,0);
+    const topList=sorted.slice(0,Math.min(topN,nbJours));
+    const topTotal=topList.reduce((s,g)=>s+g.totalJour,0);
+    const topMoy=topTotal/Math.min(topN,nbJours);
+    const reste=totalCombine-topTotal;
+
+    const totals={CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0};
+    let totalActes=0;
+    sorted.forEach(g=>{
+        totals.CRN+=g.codeCounts.CRN||0;
+        totals.CRM+=g.codeCounts.CRM||0;
+        totals.CRD+=g.codeCounts.CRD||0;
+        totals.VRN+=g.codeCounts.VRN||0;
+        totals.VRM+=g.codeCounts.VRM||0;
+        totals.VRD+=g.codeCounts.VRD||0;
+        totalActes+=g.nbActes||0;
+    });
+    const totalCodesCount=Object.values(totals).reduce((s,c)=>s+c,0);
+
+    debugLog(`  ✅ ${nbJours} jours | 💰 Total ${totalCombine.toFixed(2)}€ | 🏆 TOP ${topN} = ${topTotal.toFixed(2)}€ | reste ${reste.toFixed(2)}€`);
+
+    // Stats UI
+    document.getElementById('statNbJours').textContent=nbJours;
+    document.getElementById('statFactures').textContent=totalCodesCount;
+    document.getElementById('statFacturesCodes').textContent=
+        `CRN:${totals.CRN} CRM:${totals.CRM} CRD:${totals.CRD} VRN:${totals.VRN} VRM:${totals.VRM} VRD:${totals.VRD}`;
+    document.getElementById('statCotations').textContent=`${totals.CRN+totals.CRM+totals.CRD}`;
+    document.getElementById('statGardes').textContent=`${totals.VRN+totals.VRM+totals.VRD}`;
+    document.getElementById('statCombine').textContent=`${totalCombine.toFixed(2)} €`;
+    document.getElementById('statTop60').textContent=`${topTotal.toFixed(2)} €`;
+    document.getElementById('statTop60Moy').textContent=`Moy. ${topMoy.toFixed(2)}€/jour sur ${Math.min(topN,nbJours)} jours`;
+    document.getElementById('statExon').textContent=`${topTotal.toFixed(2)} €`;
+    document.getElementById('statHorsTop').textContent=`${reste.toFixed(2)} €`;
+
+    updateTable(sorted,topN);
+}
+
+function updateTable(gardes,topN){
+    const tbody=document.getElementById('tableBody');
+    let html=''; let cumul=0;
+    gardes.forEach((g,index)=>{
+        cumul+=g.totalJour;
+        const inTop=index<topN;
+        const rowClass=inTop?'highlight-row':'';
+        html+=`<tr class="${rowClass}">
+            <td>${index+1}</td>
+            <td>${g.date}</td>
+            <td>${g.source}</td>
+            <td><strong>${g.nbActes||0}</strong></td>
+            <td>${g.codeCounts.CRN||'-'}</td>
+            <td>${g.codeCounts.CRM||'-'}</td>
+            <td>${g.codeCounts.CRD||'-'}</td>
+            <td>${g.codeCounts.VRN||'-'}</td>
+            <td>${g.codeCounts.VRM||'-'}</td>
+            <td>${g.codeCounts.VRD||'-'}</td>
+            <td><strong>${g.totalJour.toFixed(2)} €</strong></td>
+            <td>${cumul.toFixed(2)} €</td>
+            <td>${inTop?'OUI':'NON'}</td>
+        </tr>`;
+    });
+    tbody.innerHTML=html;
+}
+
+function loadExample(){
+    debugLog(`📊 Chargement des données d'exemple...`);
+    const exampleData=[]; 
+    const dates=['15/01','22/01','28/01','05/02','12/02','18/02','25/02','03/03','10/03'];
+    const codes=['CRN','CRM','CRD','VRN','VRM','VRD'];
+    const tarifs=getTarifs();
+
+    for(let i=0;i<70;i++){
+        const date=`${dates[i%dates.length]}/2025`;
+        const nbCodes=1+Math.floor(Math.random()*5);
+        const cc={CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0};
+        for(let j=0;j<nbCodes;j++){ cc[codes[Math.floor(Math.random()*codes.length)]]++; }
+
+        let totalJour=0, details=[], nbActes=0;
+        for(const c of codes){
+            const n=cc[c];
+            if(n>0){ totalJour += n*tarifs[c]; details.push(`${n}×${c}`); nbActes += n; }
+        }
+        exampleData.push({
+            date, source:'Exemple.csv', codeCounts:{...cc},
+            nbActes, forfait:0, majorations:totalJour,
+            totalJour:Math.round(totalJour*100)/100,
+            details:details.join(' + ')
+        });
+    }
+    allGardes=exampleData;
+    loadedFiles=[{name:'Exemple.csv', nbGardes:exampleData.length, totalMontant:exampleData.reduce((s,g)=>s+g.totalJour,0)}];
+    updateFileList(); analyseData(); debugLog(`✅ Exemple chargé`);
+}
+
+function exportToExcel(){
+    if(allGardes.length===0){ alert('Aucune donnée à exporter'); return; }
+    debugLog(`📁 Export Excel...`);
+    const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
+    const sorted=[...allGardes].sort((a,b)=>b.totalJour-a.totalJour);
+    const totalCombine=sorted.reduce((s,g)=>s+g.totalJour,0);
+    const topTotal=sorted.slice(0,topN).reduce((s,g)=>s+g.totalJour,0);
+    const reste=totalCombine-topTotal;
+
+    const excelData=[
+        ['CALCULATEUR PDSA - EXONÉRATION FISCALE'],
+        ['Article 151 ter CGI - Zone ZIP'],
+        [],
+        ['Configuration'],['Paramètre','Valeur'],
+        ['Top N (jours)', topN],
+        ['CRN', document.getElementById('tarifCRN').value + ' €'],
+        ['CRM', document.getElementById('tarifCRM').value + ' €'],
+        ['CRD', document.getElementById('tarifCRD').value + ' €'],
+        ['VRN', document.getElementById('tarifVRN').value + ' €'],
+        ['VRM', document.getElementById('tarifVRM').value + ' €'],
+        ['VRD', document.getElementById('tarifVRD').value + ' €'],
+        [],
+        ['Statistiques Globales'],
+        ['Nombre de jours', sorted.length],
+        ['Total actes', sorted.reduce((s,g)=>s+(g.nbActes||0),0)],
+        ['Total combiné', totalCombine.toFixed(2) + ' €'],
+        ['TOP '+topN+' (exonération possible)', topTotal.toFixed(2) + ' €'],
+        ['Reste imposable (hors TOP '+topN+')', reste.toFixed(2) + ' €'],
+        [],
+        ['Détail des jours de garde (triés par montant décroissant)'],
+        ['Rang','Date','Source','Nb actes','CRN','CRM','CRD','VRN','VRM','VRD','Total Jour (€)','Dans TOP '+topN]
+    ];
+    let cumul=0;
+    sorted.forEach((g,i)=>{
+        cumul+=g.totalJour;
+        excelData.push([
+            i+1,g.date,g.source,g.nbActes||0,
+            g.codeCounts.CRN||0,g.codeCounts.CRM||0,g.codeCounts.CRD||0,
+            g.codeCounts.VRN||0,g.codeCounts.VRM||0,g.codeCounts.VRD||0,
+            g.totalJour.toFixed(2), i<topN?'OUI':'NON'
+        ]);
+    });
+
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(excelData);
+    XLSX.utils.book_append_sheet(wb,ws,'Analyse PDSA');
+    const date=new Date().toISOString().split('T')[0];
+    const filename=`Analyse_PDSA_${date}.xlsx`;
+    XLSX.writeFile(wb,filename);
+    debugLog(`✅ Export terminé: ${filename}`);
+}
+
+// Recalcul live si tarifs ou TopN changent
+document.querySelectorAll('.tarif-field, #topN').forEach(inp=>{
+    inp.addEventListener('change',()=>{ if(allGardes.length>0){ debugLog('🔄 Recalcul (paramètres modifiés)'); analyseData(); }});
+});
+</script>
+</body>
+</html>
