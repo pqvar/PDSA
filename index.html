@@ -205,7 +205,7 @@
       <div class="section-title">⏱️ TOP créneaux (Jour × Plage horaire × Férié/WE/Semaine × Vacances)</div>
       <div class="alert alert-info">
         <span class="badge blue">Source horaire : exports Stellair (Date de création & Payé total)</span>
-        <span class="badge gray">Les lignes sans heure (ex. forfait CPAM) sont classées “Forfait”</span>
+        <span class="badge gray">Les lignes sans heure (ex. forfait CPAM) sont classées “Forfait” mais non agrégées dans les créneaux</span>
       </div>
       <div class="table-container">
         <table>
@@ -396,7 +396,6 @@ function findDateInRow(row, dateColIndex){
 }
 
 function extractHourFromRow(row){
-  // Cherche un motif HH:MM dans la ligne
   for(let j=0;j<row.length;j++){
     const cell = row[j];
     if(!cell) continue;
@@ -548,9 +547,14 @@ function parseExcelData(data,fileName){
   }
 
   const codes=['CRN','CRM','CRD','VRN','VRM','VRD'];
-  const regexMap = {
-    CRN:/(?<![A-Z])CRN(?![A-Z])/g, CRM:/(?<![A-Z])CRM(?![A-Z])/g, CRD:/(?<![A-Z])CRD(?![A-Z])/g,
-    VRN:/(?<![A-Z])VRN(?![A-Z])/g, VRM:/(?<![A-Z])VRM(?![A-Z])/g, VRD:/(?<![A-Z])VRD(?![A-Z])/g
+  // variantes tolérées ("CR N", etc.)
+  const codePatterns = {
+    CRN: /(CR\s*N|CRN)/gi,
+    CRM: /(CR\s*M|CRM)/gi,
+    CRD: /(CR\s*D|CRD)/gi,
+    VRN: /(VR\s*N|VRN)/gi,
+    VRM: /(VR\s*M|VRM)/gi,
+    VRD: /(VR\s*D|VRD)/gi
   };
   const dateGroups={};
 
@@ -562,24 +566,21 @@ function parseExcelData(data,fileName){
     }
     dateGroups[date].sources.add(fileName);
 
-    // astreinte CPAM ?
+    // astreinte CPAM → on cumule en forfait uniquement (pas d'évènement horaire)
     const isAstreinte = row.some(c => typeof c === 'string' && /(astreinte|pr[dnm]\b|mi\s*nuit\s*prm)/i.test(c));
     if(isAstreinte){
-      // priorité aux colonnes "RO/RC/montant/total/forfait"
       const montant = findAmountInRow(row, headerRow);
       if(!isNaN(montant) && montant!==0){
-        dateGroups[date].forfait += montant;
-        // ajoute une ligne "évènement" sans heure → slot = Forfait
-        eventRows.push({date, heure:null, slot:'Forfait', amount:montant, source:fileName});
+        dateGroups[date].forfait += montant; // ✅ pas de push dans eventRows
       }
     }
 
-    // codes
+    // codes CR*/VR* — tolérants
     for(let j=0;j<row.length;j++){
       const cell=row[j]; if(!cell) continue;
       const s=String(cell).toUpperCase();
       for(const c of codes){
-        const m=s.match(regexMap[c]);
+        const m=s.match(codePatterns[c]);
         if(m){
           dateGroups[date].codeCounts[c]+=m.length;
           dateGroups[date].nbActes+=m.length;
@@ -621,11 +622,9 @@ function findAmountInRow(row, headerRow){
 
 // 2) Parser Stellair (horodaté)
 function parseStellair(rows, fileName){
-  // header est à rows[0]
   const header = rows[0].map(x=>String(x||'').trim());
   const idxDate = header.findIndex(h=>/date.+cr[eé]ation/i.test(h));
   const idxPaid = header.findIndex(h=>/pay[eé]\s*total/i.test(h));
-  const idxSoins= header.findIndex(h=>/date\s*des\s*soins/i.test(h));
   if(idxDate===-1 || idxPaid===-1){
     debugLog('⚠️ Stellair: colonnes manquantes'); return [];
   }
@@ -636,14 +635,14 @@ function parseStellair(rows, fileName){
     if(!rawDate) continue;
     const dateStr = formatDate(rawDate); if(!dateStr) continue;
 
-    // Extraire heure
+    // heure (si présente)
     let hr = null;
     const m = String(rawDate).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
     if(m) hr = parseInt(m[1],10);
 
     const amount = parseMoney(rawPaid);
     if(!isNaN(amount) && amount!==0){
-      evts.push({date:dateStr, heure:hr, slot:slotFromHour(hr), amount, source:fileName});
+      evts.push({date:dateStr, heure:hr, slot:slotFromHour(hr), amount:amount, source:fileName});
     }
   }
   return evts;
@@ -665,27 +664,29 @@ function consolidateByDate(rows){
     g.totalJour += r.totalJour||0;
   });
 
-  // Ajouter les événements Stellair (agrégés par date)
+  // ✅ Ajouter uniquement les évènements Stellair horodatés
   const dayEvts=new Map();
-  eventRows.forEach(ev=>{
-    if(!dayEvts.has(ev.date)) dayEvts.set(ev.date,0);
-    dayEvts.set(ev.date, dayEvts.get(ev.date)+ (ev.amount||0));
-  });
+  eventRows
+    .filter(ev => ev.heure !== null && ev.heure !== undefined)
+    .forEach(ev=>{
+      if(!dayEvts.has(ev.date)) dayEvts.set(ev.date,0);
+      dayEvts.set(ev.date, dayEvts.get(ev.date)+ (ev.amount||0));
+    });
+
   const tarifs=getTarifs();
   const out=[];
-  // intègre les dates issues rows
   map.forEach((g)=>{
     const extra = dayEvts.get(g.date)||0;
-    const recomputeCodes = Object.keys(g.codeCounts).reduce((s,k)=>s + g.codeCounts[k]*(tarifs[k]||0),0);
-    const total = Math.round((g.forfait + recomputeCodes + extra)*100)/100;
+    const codesSum = Object.keys(g.codeCounts).reduce((s,k)=>s + g.codeCounts[k]*(tarifs[k]||0),0);
+    const total = Math.round((g.forfait + codesSum + extra)*100)/100;
     out.push({
       date:g.date, source:[...g.sources].join(' + ') + (extra? ' + Stellair':''),
       codeCounts:g.codeCounts, nbActes:g.nbActes,
-      forfait:Math.round(g.forfait*100)/100, majorations:recomputeCodes + extra, totalJour:total
+      forfait:Math.round(g.forfait*100)/100, majorations:codesSum + extra, totalJour:total
     });
     dayEvts.delete(g.date);
   });
-  // intègre les dates uniquement Stellair
+  // dates uniquement Stellair (horodatées)
   dayEvts.forEach((val, d)=>{
     out.push({
       date:d, source:'Stellair', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0},
@@ -710,7 +711,6 @@ function updateFileList(){
 
 function removeFile(i){
   const removed=loadedFiles[i];
-  // Nettoyage: on supprime les lignes associées à la source
   allGardes = allGardes.filter(g=>!g.source.includes(removed.name));
   eventRows = eventRows.filter(e=>e.source!==removed.name);
   loadedFiles.splice(i,1);
@@ -756,7 +756,7 @@ function analyseData(){
 
   updateTable(sorted, topN);
   rebuildWeekdayAnalytics(sorted);
-  rebuildTopCreneaux(); // basé sur eventRows
+  rebuildTopCreneaux();
 }
 
 function updateTable(gardes, topN){
@@ -789,7 +789,6 @@ function rebuildWeekdayAnalytics(mergedInput=null){
     return;
   }
 
-  // Flags week-end / fériés / vacances
   const years = Array.from(new Set(merged.map(x=>parseInt(x.date.split('/')[2],10))));
   const hol = new Set(); years.forEach(y=> frenchHolidays(y).forEach(d=>hol.add(d)));
   const enrich = merged.map(g=>{
@@ -800,7 +799,6 @@ function rebuildWeekdayAnalytics(mergedInput=null){
     return {...g, wd, isWeekend:we, isHoliday:isHol, isVacation:vac};
   });
 
-  // Indicateurs simples
   const allAvg = enrich.reduce((s,g)=>s+g.totalJour,0)/enrich.length;
   const weDays = enrich.filter(g=>g.isWeekend);
   const holDays= enrich.filter(g=>g.isHoliday);
@@ -810,7 +808,6 @@ function rebuildWeekdayAnalytics(mergedInput=null){
   document.getElementById('wkWEAvg').textContent  = `${weAvg.toFixed(2)} €`;
   document.getElementById('wkHolAvg').textContent = `${holAvg.toFixed(2)} €`;
 
-  // Tableau Lun..Dim
   const byWd = {};
   WEEKDAYS.forEach(k=>byWd[k]={days:[], total:0});
   enrich.forEach(g=>{ byWd[g.wd].days.push(g); byWd[g.wd].total += g.totalJour; });
@@ -827,7 +824,6 @@ function rebuildWeekdayAnalytics(mergedInput=null){
   });
   document.getElementById('weekdayTableBody').innerHTML = html;
 
-  // Tableau type (Férié / WE / Semaine) × (Vacances/Hors)
   function baseType(r){ return r.isHoliday ? 'Férié' : (r.isWeekend ? 'Week-end' : 'Semaine'); }
   const buckets={};
   enrich.forEach(r=>{
@@ -867,13 +863,13 @@ function rebuildTopCreneaux(){
     const cluster = `${wd} — ${r.slot} — ${typeBase} — ${vac?'Vacances':'Hors vacances'}`;
     return {...r, wd, isWeekend:we, isHoliday:isHol, isVacation:vac, typeBase, cluster};
   });
-  // agrégation par date-slot pour normaliser au "jour-slot"
-  const daySlotMap=new Map(); // key: date|slot|type|vac -> sum
+  // agrégation par date-slot (jour-slot)
+  const daySlotMap=new Map();
   rows.forEach(r=>{
+    if(r.heure===null || r.heure===undefined) return; // ignore forfaits
     const key = `${r.date}|${r.slot}|${r.typeBase}|${r.isVacation?'1':'0'}`;
     daySlotMap.set(key, (daySlotMap.get(key)||0)+ (r.amount||0));
   });
-  // Regroupe par cluster
   const clusters={}; let totalAll=0;
   daySlotMap.forEach((val,key)=>{
     const [d,slot,typeBase,vac] = key.split('|');
@@ -943,13 +939,11 @@ function exportToExcel(){
     excelData.push([i+1,g.date,g.source,g.nbActes||0,g.codeCounts.CRN||0,g.codeCounts.CRM||0,g.codeCounts.CRD||0,g.codeCounts.VRN||0,g.codeCounts.VRM||0,g.codeCounts.VRD||0,(g.forfait||0).toFixed(2),g.totalJour.toFixed(2), i<topN?'OUI':'NON']);
   });
 
-  // TOP créneaux → on ajoute deux onglets si des events existent
   const wb=XLSX.utils.book_new();
   const wsMain=XLSX.utils.aoa_to_sheet(excelData);
   XLSX.utils.book_append_sheet(wb,wsMain,'Analyse PDSA');
 
   if(eventRows.length){
-    // Reconstruire clusters comme dans l’écran
     const years = Array.from(new Set(eventRows.map(x=>parseInt(x.date.split('/')[2],10))));
     const hol = new Set(); years.forEach(y=> frenchHolidays(y).forEach(d=>hol.add(d)));
     const rows = eventRows.map(r=>{
@@ -963,6 +957,7 @@ function exportToExcel(){
     });
     const daySlotMap=new Map();
     rows.forEach(r=>{
+      if(r.heure===null || r.heure===undefined) return;
       const key = `${r.date}|${r.slot}|${r.typeBase}|${r.isVacation?'1':'0'}`;
       daySlotMap.set(key, (daySlotMap.get(key)||0)+ (r.amount||0));
     });
@@ -977,9 +972,9 @@ function exportToExcel(){
     });
     const arr=[]; Object.keys(clusters).forEach(k=>{
       const vals=clusters[k].slice().sort((a,b)=>a-b);
-      const nb=vals.length, tot=vals.reduce((s,v)=>s+v,0), avg=tot/nb;
+      const nb=vals.length, tot=vals.reduce((s,v)=>s+v,0), moy=tot/nb;
       const med = nb%2 ? vals[(nb-1)/2] : (vals[nb/2-1]+vals[nb/2])/2;
-      arr.push({cluster:k, occ:nb, total:tot, moy:avg, med:med, part:(tot*100/totalAll)});
+      arr.push({cluster:k, occ:nb, total:tot, moy:moy, med:med, part:(tot*100/totalAll)});
     });
 
     const topAvg = [['Cluster','Occur.','CA total','CA moyen','Médiane','Part %']];
@@ -998,13 +993,11 @@ function exportToExcel(){
 /* ===================== EXEMPLE ===================== */
 function loadExample(){
   const t=getTarifs();
-  // Exemples "actes/astreintes"
   allGardes = [
     {date:'07/07/2025', source:'Actes.xlsx', codeCounts:{CRN:3,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:4, forfait:0, majorations:3*t.CRN+t.CRM, totalJour:3*t.CRN+t.CRM},
     {date:'07/07/2025', source:'CPAM_Juillet.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:60, majorations:0, totalJour:60},
     {date:'08/07/2025', source:'Actes.xlsx', codeCounts:{CRN:1,CRM:0,CRD:0,VRN:1,VRM:0,VRD:0}, nbActes:2, forfait:0, majorations:t.CRN+t.VRN, totalJour:t.CRN+t.VRN}
   ];
-  // Exemples Stellair horodatés
   eventRows = [
     {date:'07/07/2025', heure:21, slot:slotFromHour(21), amount:120, source:'Stellair.csv'},
     {date:'07/07/2025', heure:22, slot:slotFromHour(22), amount:80, source:'Stellair.csv'},
