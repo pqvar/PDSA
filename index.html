@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Calculateur PDSA - Exonération Fiscale Art. 151 ter</title>
+  <title>Calculateur PDSA – Exonération 151 ter • ZIP</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -11,7 +11,6 @@
     .container{max-width:1400px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden}
     .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:30px;text-align:center}
     .header h1{font-size:2em;margin-bottom:10px}
-    .header p{opacity:.9;font-size:1.1em}
     .content{padding:30px}
     .section{background:#f8f9fa;border-radius:12px;padding:25px;margin-bottom:25px;border:2px solid #e9ecef}
     .section-title{font-size:1.3em;color:#667eea;margin-bottom:20px;display:flex;align-items:center;gap:10px}
@@ -23,7 +22,6 @@
     .upload-icon{font-size:3em;color:#667eea;margin-bottom:15px}
     .file-list{background:#fff;border-radius:8px;padding:15px;margin-top:15px}
     .file-item{background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-    .file-info{flex:1}
     .file-name{font-weight:600;color:#856404}
     .file-stats{font-size:.9em;color:#856404;margin-top:5px}
     .btn-remove{background:#dc3545;color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;font-weight:600;transition:.3s}
@@ -72,27 +70,30 @@
     .debug-panel{background:#f0f0f0;border:1px solid #ccc;border-radius:8px;padding:15px;margin-top:20px;font-family:'Courier New',monospace;font-size:.9em}
     .debug-title{font-weight:600;margin-bottom:10px;color:#333}
     .debug-log{max-height:200px;overflow-y:auto;background:#fff;padding:10px;border-radius:4px}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:.8em;font-weight:700}
+    .badge.blue{background:#e7f1ff;color:#0b5ed7;border:1px solid #b7cffc}
+    .badge.green{background:#e6ffed;color:#0a7c3b;border:1px solid #b3f0c9}
+    .badge.orange{background:#fff4e5;color:#ad5f00;border:1px solid #ffd8a8}
+    .badge.gray{background:#f1f3f5;color:#495057;border:1px solid #dee2e6}
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>🏥 Calculateur PDSA</h1>
-    <p>Exonération Fiscale - Article 151 ter CGI - Zone ZIP</p>
+    <p>Exonération Fiscale — Article 151 ter CGI — Zone ZIP</p>
   </div>
 
   <div class="content">
     <!-- Upload -->
     <div class="section">
-      <div class="section-title">📂 Fichiers de gardes chargés</div>
-
+      <div class="section-title">📂 Fichiers chargés</div>
       <div class="upload-zone" id="uploadZone">
         <div class="upload-icon">📤</div>
-        <h3>Glissez-déposez vos fichiers Excel ou CSV ici</h3>
+        <h3>Glissez-déposez vos fichiers Excel/CSV (Stellair, actes, astreintes CPAM)</h3>
         <p style="color:#6c757d;margin-top:10px;">ou cliquez pour sélectionner (.xlsx, .xls, .csv)</p>
         <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv" multiple>
       </div>
-
       <div id="fileList"></div>
       <div id="totalSummary"></div>
     </div>
@@ -112,7 +113,7 @@
 
       <div class="btn-group">
         <button class="btn btn-primary" onclick="analyseData()">🔍 Analyser</button>
-        <button class="btn btn-success" onclick="loadExample()">📊 Charger un exemple</button>
+        <button class="btn btn-success" onclick="loadExample()">📊 Exemple</button>
         <button class="btn btn-info" onclick="exportToExcel()">📁 Exporter Excel</button>
         <button class="btn btn-warning" onclick="toggleDebug()">🐛 Debug</button>
       </div>
@@ -123,7 +124,7 @@
       </div>
     </div>
 
-    <!-- Stats -->
+    <!-- Stats globales -->
     <div class="section">
       <div class="section-title">📊 Statistiques globales</div>
       <div class="stats-grid">
@@ -138,10 +139,10 @@
       </div>
     </div>
 
-    <!-- Tableau -->
+    <!-- Détail jours -->
     <div class="section">
-      <div class="section-title">📋 Détail des gardes</div>
-      <div class="alert alert-info">💡 Les <span id="lblTopN">60</span> premiers jours (les plus rémunérateurs) sont surlignés en vert</div>
+      <div class="section-title">📋 Détail des jours</div>
+      <div class="alert alert-info">💡 Les <span id="lblTopN">60</span> jours les plus rémunérateurs sont surlignés en vert.</div>
       <div class="table-container">
         <table id="detailTable">
           <thead>
@@ -149,24 +150,101 @@
             <th>Rang</th><th>Date</th><th>Source(s)</th><th>Nb actes</th>
             <th>CRN</th><th>CRM</th><th>CRD</th>
             <th>VRN</th><th>VRM</th><th>VRD</th>
-            <th>Forfait CPAM</th>
-            <th>Total Jour</th><th>Cumul</th><th>Dans TOP N</th>
+            <th>Forfait CPAM</th><th>Total Jour</th><th>Cumul</th><th>Dans TOP N</th>
           </tr>
           </thead>
           <tbody id="tableBody">
-          <tr><td colspan="14" style="text-align:center;padding:40px;color:#6c757d;">Chargez vos fichiers Excel ou CSV pour voir les détails</td></tr>
+          <tr><td colspan="14" style="text-align:center;padding:40px;color:#6c757d;">Chargez vos fichiers pour voir les détails</td></tr>
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- Analyse Semaine / Fériés / Vacances -->
+    <div class="section">
+      <div class="section-title">📆 Semaine, week-ends, fériés & vacances</div>
+      <div class="btn-group" style="margin-bottom:10px">
+        <button class="btn btn-info" onclick="rebuildWeekdayAnalytics()">🔄 Recalculer</button>
+        <button class="btn btn-warning" onclick="document.getElementById('vacFile').click()">📥 Importer Vacances (CSV)</button>
+        <input type="file" id="vacFile" class="file-input" accept=".csv" onchange="loadVacationsCSV(this.files[0])">
+        <span id="vacInfo" style="align-self:center;color:#6c757d;"></span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card blue"><div class="stat-label">Moyenne / jour (toutes dates)</div><div class="stat-value" id="wkAllAvg">0 €</div></div>
+        <div class="stat-card teal"><div class="stat-label">Moyenne week-end</div><div class="stat-value" id="wkWEAvg">0 €</div></div>
+        <div class="stat-card red"><div class="stat-label">Moyenne jours fériés</div><div class="stat-value" id="wkHolAvg">0 €</div></div>
+      </div>
+
+      <div class="table-container" style="margin-top:16px">
+        <table>
+          <thead>
+          <tr>
+            <th>Jour</th><th>Nb jours</th><th>Total €</th><th>Moyenne €</th><th>Médiane €</th><th>Top 3 dates</th>
+          </tr>
+          </thead>
+          <tbody id="weekdayTableBody">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">Importe des fichiers pour voir l’analyse</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-container" style="margin-top:16px">
+        <table>
+          <thead>
+          <tr><th>Catégorie</th><th>Nb jours</th><th>Total €</th><th>Moyenne €</th><th>Médiane €</th></tr>
+          </thead>
+          <tbody id="wkTypeBody">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TOP créneaux -->
+    <div class="section">
+      <div class="section-title">⏱️ TOP créneaux (Jour × Plage horaire × Férié/WE/Semaine × Vacances)</div>
+      <div class="alert alert-info">
+        <span class="badge blue">Source horaire : exports Stellair (Date de création & Payé total)</span>
+        <span class="badge gray">Les lignes sans heure (ex. forfait CPAM) sont classées “Forfait”</span>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+          <tr>
+            <th>Cluster</th><th>Occur.</th><th>CA total</th><th>CA moyen</th><th>Médiane</th><th>Part du total</th>
+          </tr>
+          </thead>
+          <tbody id="topAvgBody">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-container" style="margin-top:16px">
+        <table>
+          <thead>
+          <tr>
+            <th>Cluster</th><th>Occur.</th><th>CA total</th><th>CA moyen</th><th>Médiane</th><th>Part du total</th>
+          </tr>
+          </thead>
+          <tbody id="topTotalBody">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script>
-let allGardes = [];      // sorties "par fichier"
-let loadedFiles = [];
+/* ===================== ÉTAT GLOBAL ===================== */
+let allGardes = [];     // sorties “garde par jour” (actes/astreintes)
+let loadedFiles = [];   // fichiers importés (stats affichage)
 let debugMode = false;
+let vacationSpans = []; // {start:'dd/mm/yyyy', end:'dd/mm/yyyy', zone:'A|B|C|ALL'}
+let eventRows = [];     // lignes horodatées (Stellair): {date, heure, slot, amount, source}
 
+/* ===================== DEBUG ===================== */
 function debugLog(message){
   console.log(message);
   if(debugMode){
@@ -183,10 +261,9 @@ function toggleDebug(){
   if(debugMode){ document.getElementById('debugLog').innerHTML='📝 Mode debug activé<br>'; }
 }
 
-/* ---------- Upload & parsing ---------- */
+/* ===================== UPLOAD ===================== */
 const uploadZone=document.getElementById('uploadZone');
 const fileInput=document.getElementById('fileInput');
-
 uploadZone.addEventListener('click',()=>fileInput.click());
 uploadZone.addEventListener('dragover',(e)=>{e.preventDefault();uploadZone.classList.add('dragover');});
 uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
@@ -194,36 +271,35 @@ uploadZone.addEventListener('drop',(e)=>{
   e.preventDefault();uploadZone.classList.remove('dragover');
   const files=[...e.dataTransfer.files];
   debugLog(`📤 ${files.length} fichier(s) déposé(s)`);
-  files.forEach(f=>{
-    if(/\.(xlsx|xls)$/i.test(f.name)) loadExcelFile(f);
-    else if(/\.csv$/i.test(f.name)) loadCSVFile(f);
-    else debugLog(`❌ Fichier ignoré (format non supporté): ${f.name}`);
-  });
+  files.forEach(routeFile);
 });
 fileInput.addEventListener('change',(e)=>{
   const files=[...e.target.files];
   debugLog(`📂 ${files.length} fichier(s) sélectionné(s)`);
-  files.forEach(f=>{
-    if(/\.(xlsx|xls)$/i.test(f.name)) loadExcelFile(f);
-    else if(/\.csv$/i.test(f.name)) loadCSVFile(f);
-  });
+  files.forEach(routeFile);
   e.target.value='';
 });
 
+function routeFile(file){
+  if(/\.(xlsx|xls)$/i.test(file.name)) {
+    loadExcelFile(file);
+  } else if(/\.csv$/i.test(file.name)) {
+    loadCSVFile(file);
+  } else {
+    debugLog(`❌ Format non supporté: ${file.name}`);
+  }
+}
+
 function loadExcelFile(file){
-  debugLog(`📖 Lecture du fichier: ${file.name}`);
+  debugLog(`📖 Lecture XLSX: ${file.name}`);
   const reader=new FileReader();
   reader.onload=(e)=>{
     try{
       const data=new Uint8Array(e.target.result);
       const wb=XLSX.read(data,{type:'array'});
       const sheet=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(sheet,{header:1});
-      const gardes=parseExcelData(rows,file.name);
-      loadedFiles.push({name:file.name, nbGardes:gardes.length, totalMontant:gardes.reduce((s,g)=>s+g.totalJour,0)});
-      allGardes = allGardes.concat(gardes);
-      updateFileList();
-      analyseData();
+      const rows=XLSX.utils.sheet_to_json(sheet,{header:1, raw:false});
+      parseRoutedData(rows, file.name);
     }catch(err){ alert(`Erreur lecture ${file.name}: ${err.message}`); }
   };
   reader.readAsArrayBuffer(file);
@@ -249,11 +325,7 @@ function loadCSVFile(file){
         row.push(parseCSVValue(cur.trim()));
         return row;
       });
-      const gardes=parseExcelData(rows,file.name);
-      loadedFiles.push({name:file.name, nbGardes:gardes.length, totalMontant:gardes.reduce((s,g)=>s+g.totalJour,0)});
-      allGardes = allGardes.concat(gardes);
-      updateFileList();
-      analyseData();
+      parseRoutedData(rows, file.name);
     }catch(err){ alert(`Erreur CSV ${file.name}: ${err.message}`); }
   };
   reader.readAsText(file,'UTF-8');
@@ -266,11 +338,31 @@ function parseCSVValue(v){
   return (!isNaN(n) && n.trim()!=='') ? parseFloat(n) : v;
 }
 
-/* ---------- Helpers (dates / montants / astreinte) ---------- */
+/* ===================== PARSING ROUTER ===================== */
+function parseRoutedData(rows, fileName){
+  // Détecter si Stellair (Date de création & Payé total)
+  const header = (rows[0]||[]).map(x=>String(x||'').toLowerCase());
+  const isStellair = header.some(h=>/date.+cr[eé]ation/.test(h)) && header.some(h=>/pay[eé]\s*total/.test(h));
+  if(isStellair){
+    const evts = parseStellair(rows, fileName);
+    eventRows = eventRows.concat(evts);
+    loadedFiles.push({name:fileName, nbGardes:evts.length, totalMontant:evts.reduce((s,r)=>s+r.amount,0)});
+    debugLog(`🕒 Stellair détecté: ${evts.length} lignes horodatées`);
+  }else{
+    const gardes = parseExcelData(rows, fileName);
+    allGardes = allGardes.concat(gardes);
+    loadedFiles.push({name:fileName, nbGardes:gardes.length, totalMontant:gardes.reduce((s,g)=>s+g.totalJour,0)});
+    debugLog(`🧾 Fichier actes/astreintes: ${gardes.length} jours agrégés`);
+  }
+  updateFileList();
+  analyseData();
+}
+
+/* ===================== UTILITAIRES ===================== */
 function parseMoney(val){
   if(val===null||val===undefined) return 0;
   if(typeof val==='number') return val;
-  const s=String(val).replace(/\s/g,'').replace('€','').replace(',','.');
+  const s=String(val).replace(/\s/g,'').replace('€','').replace(',', '.');
   const m=s.match(/-?\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : 0;
 }
@@ -303,33 +395,15 @@ function findDateInRow(row, dateColIndex){
   return null;
 }
 
-function rowContainsAstreinte(row){
-  return row.some(c => typeof c === 'string' &&
-    /(astreinte|pr[dnm]\b|mi\s*nuit\s*prm)/i.test(c)
-  );
-}
-
-// priorité de colonnes: RO > RC > montant/total/forfait > payé/brut/net
-function findAmountInRow(row, headerRow){
-  const order=[
-    /^(ro)\s*:?$/i, /^(rc)\s*:?$/i,
-    /montant|total|forfait/i,
-    /pay|brut|net/i
-  ];
-  if(headerRow && Array.isArray(headerRow)){
-    for(const rx of order){
-      const idxList=[];
-      headerRow.forEach((h,idx)=>{ if(typeof h==='string' && rx.test(h)) idxList.push(idx); });
-      if(idxList.length){
-        const vals=idxList.map(i=>parseMoney(row[i])).filter(v=>!isNaN(v) && v!==0);
-        if(vals.length) return vals.sort((a,b)=>Math.abs(b)-Math.abs(a))[0];
-      }
-    }
+function extractHourFromRow(row){
+  // Cherche un motif HH:MM dans la ligne
+  for(let j=0;j<row.length;j++){
+    const cell = row[j];
+    if(!cell) continue;
+    const m = String(cell).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if(m) return parseInt(m[1],10);
   }
-  // fallback: plus grand nombre trouvé dans la ligne
-  let best=0;
-  row.forEach(c=>{ const n=parseMoney(c); if(!isNaN(n) && Math.abs(n)>Math.abs(best)) best=n; });
-  return best||0;
+  return null;
 }
 
 function formatDate(val){
@@ -369,11 +443,93 @@ function getTarifs(){
   };
 }
 
-/* ---------- Parsing mixte (actes + paiements CPAM PRD/PRN/PRM) ---------- */
+function slotFromHour(h){
+  if(h===null || h===undefined) return 'Forfait';
+  h = parseInt(h,10);
+  if(0 <= h && h <= 6)  return 'Nuit (00-06)';
+  if(7 <= h && h <= 11) return 'Matin (07-11)';
+  if(12 <= h && h <= 13) return 'Midi (12-13)';
+  if(14 <= h && h <= 18) return 'Après-midi (14-18)';
+  return 'Soir (19-23)';
+}
+
+/* ===================== FÉRIÉS FRANCE ===================== */
+function easterDate(year){
+  const a=year%19, b=Math.floor(year/100), c=year%100;
+  const d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3);
+  const h=(19*a + b - d - g + 15) % 30, i=Math.floor(c/4), k=c%4;
+  const l=(32 + 2*e + 2*i - h - k) % 7, m=Math.floor((a + 11*h + 22*l)/451);
+  const month=Math.floor((h + l - 7*m + 114)/31);
+  const day=((h + l - 7*m + 114) % 31) + 1;
+  return new Date(year, month-1, day);
+}
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function fmt(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function frenchHolidays(year){
+  const easter = easterDate(year);
+  return new Set([
+    fmt(new Date(year,0,1)),fmt(new Date(year,4,1)),fmt(new Date(year,4,8)),
+    fmt(new Date(year,6,14)),fmt(new Date(year,7,15)),fmt(new Date(year,10,1)),
+    fmt(new Date(year,10,11)),fmt(new Date(year,11,25)),
+    fmt(addDays(easter,1)),fmt(addDays(easter,39)),fmt(addDays(easter,50))
+  ]);
+}
+function isWeekend(dStr){
+  const [dd,mm,yy]=dStr.split('/').map(v=>parseInt(v,10));
+  const w=new Date(yy,mm-1,dd).getDay();
+  return (w===0 || w===6);
+}
+function weekdayShort(dStr){
+  const [dd,mm,yy]=dStr.split('/').map(v=>parseInt(v,10));
+  const w=new Date(yy,mm-1,dd).getDay(); // 0=dim
+  const map=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  return map[w];
+}
+
+/* ===================== VACANCES SCOLAIRES ===================== */
+function loadVacationsCSV(file){
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const text=e.target.result;
+      const lines=text.split(/\r?\n/).filter(l=>l.trim());
+      if(lines.length<2) throw new Error('Fichier vide');
+      const sep = lines[0].includes(';')?';':',';
+      const head = lines[0].split(sep).map(x=>x.trim().toLowerCase());
+      const iStart=head.indexOf('start'), iEnd=head.indexOf('end'), iZone=head.indexOf('zone');
+      if(iStart===-1 || iEnd===-1) throw new Error('Colonnes requises: start;end;zone');
+      vacationSpans = lines.slice(1).map(l=>{
+        const c=l.split(sep).map(x=>x.trim());
+        return {start:c[iStart], end:c[iEnd], zone: (iZone>=0? (c[iZone]||'ALL').toUpperCase() : 'ALL')};
+      }).filter(s=>s.start && s.end);
+      document.getElementById('vacInfo').textContent = `Vacances chargées: ${vacationSpans.length} périodes`;
+      rebuildWeekdayAnalytics();
+      rebuildTopCreneaux(); // maj clusters si créneaux affichés
+    }catch(err){
+      alert('CSV vacances invalide. Format attendu: start;end;zone (dates jj/mm/aaaa)');
+    }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+function dateInSpan(dStr, span){
+  const [d,m,y]=dStr.split('/').map(v=>parseInt(v,10));
+  const dt=new Date(y,m-1,d);
+  const [sd,sm,sy]=span.start.split('/').map(v=>parseInt(v,10));
+  const [ed,em,ey]=span.end.split('/').map(v=>parseInt(v,10));
+  const s=new Date(sy,sm-1,sd), e=new Date(ey,em-1,ed);
+  return dt>=s && dt<=e;
+}
+function isVacation(dStr, zone='ALL'){
+  if(!vacationSpans.length) return false;
+  const Z = zone.toUpperCase();
+  return vacationSpans.some(s => (s.zone==='ALL' || s.zone===Z) && dateInSpan(dStr, s));
+}
+
+/* ===================== PARSERS ===================== */
+// 1) Parser générique (actes + astreintes CPAM)
 function parseExcelData(data,fileName){
   const tarifs=getTarifs();
-
-  // 1) en-tête
+  // header
   let headerRow=null, headerIndex=-1;
   for(let i=0;i<Math.min(10,data.length);i++){
     const row=data[i];
@@ -384,7 +540,7 @@ function parseExcelData(data,fileName){
   }
   if(!headerRow){ headerIndex=0; headerRow=data[0]||[]; }
 
-  // 2) colonne date (ex. "Date de paiement")
+  // colonne date
   let dateCol=-1;
   for(let j=0;j<headerRow.length;j++){
     const cell=headerRow[j];
@@ -392,37 +548,34 @@ function parseExcelData(data,fileName){
   }
 
   const codes=['CRN','CRM','CRD','VRN','VRM','VRD'];
-  const regexMap={
+  const regexMap = {
     CRN:/(?<![A-Z])CRN(?![A-Z])/g, CRM:/(?<![A-Z])CRM(?![A-Z])/g, CRD:/(?<![A-Z])CRD(?![A-Z])/g,
-    VRN:/(?<![A-Z])VRN(?![A-Z])/g, VRM:/(?<![A-Z])VRM(?![A-Z])/g, VRD:/(?<![A-Z])VRD(?![A-Z])/g,
+    VRN:/(?<![A-Z])VRN(?![A-Z])/g, VRM:/(?<![A-Z])VRM(?![A-Z])/g, VRD:/(?<![A-Z])VRD(?![A-Z])/g
   };
-
   const dateGroups={};
+
   for(let i=headerIndex+1;i<data.length;i++){
-    const row=data[i];
-    if(!row || row.length===0) continue;
-
-    // date
-    let date=findDateInRow(row, dateCol);
-    if(!date) date=`Jour ${i-headerIndex}`;
-
+    const row=data[i]; if(!row||!row.length) continue;
+    const date = findDateInRow(row, dateCol) || `Jour ${i-headerIndex}`;
     if(!dateGroups[date]){
       dateGroups[date]={date, sources:new Set(), codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, forfait:0, nbActes:0};
     }
     dateGroups[date].sources.add(fileName);
 
-    // astreintes CPAM
-    if(rowContainsAstreinte(row)){
-      const montant=findAmountInRow(row, headerRow);
+    // astreinte CPAM ?
+    const isAstreinte = row.some(c => typeof c === 'string' && /(astreinte|pr[dnm]\b|mi\s*nuit\s*prm)/i.test(c));
+    if(isAstreinte){
+      // priorité aux colonnes "RO/RC/montant/total/forfait"
+      const montant = findAmountInRow(row, headerRow);
       if(!isNaN(montant) && montant!==0){
         dateGroups[date].forfait += montant;
-        debugLog(`➕ Astreinte détectée @ ${date} : ${montant}€ (${fileName})`);
+        // ajoute une ligne "évènement" sans heure → slot = Forfait
+        eventRows.push({date, heure:null, slot:'Forfait', amount:montant, source:fileName});
       }
     }
 
-    // comptage des codes (actes/majorations)
+    // codes
     for(let j=0;j<row.length;j++){
-      if(j===dateCol) continue;
       const cell=row[j]; if(!cell) continue;
       const s=String(cell).toUpperCase();
       for(const c of codes){
@@ -435,115 +588,144 @@ function parseExcelData(data,fileName){
     }
   }
 
-  // 3) dictionnaire → tableau (par fichier, encore — on consolidera plus loin)
   const gardes=[];
   for(const d in dateGroups){
     const g=dateGroups[d];
     let totalCodes=0;
-    for(const c of codes){ totalCodes += g.codeCounts[c]*(getTarifs()[c]||0); }
-    const totalJour=Math.round((g.forfait + totalCodes)*100)/100;
-
+    for(const c of codes){ totalCodes += g.codeCounts[c]*(tarifs[c]||0); }
+    const totalJour = Math.round((g.forfait + totalCodes)*100)/100;
     if(totalJour>0 || g.forfait!==0){
       gardes.push({
-        date:d,
-        source:[...g.sources].join(' + '), // trace des sources
-        codeCounts:{...g.codeCounts},
-        nbActes:g.nbActes,
-        forfait:Math.round(g.forfait*100)/100,
-        majorations:totalCodes,
-        totalJour
+        date:d, source:[...g.sources].join(' + '),
+        codeCounts:{...g.codeCounts}, nbActes:g.nbActes,
+        forfait:Math.round(g.forfait*100)/100, majorations:totalCodes, totalJour
       });
     }
   }
   return gardes;
 }
+function findAmountInRow(row, headerRow){
+  const order=[/^(ro)\s*:?$/i,/^(rc)\s*:?$/i,/montant|total|forfait/i,/pay|brut|net/i];
+  if(headerRow && Array.isArray(headerRow)){
+    for(const rx of order){
+      const idxs=[]; headerRow.forEach((h,idx)=>{ if(typeof h==='string' && rx.test(h)) idxs.push(idx); });
+      if(idxs.length){
+        const vals=idxs.map(i=>parseMoney(row[i])).filter(v=>!isNaN(v)&&v!==0);
+        if(vals.length) return vals.sort((a,b)=>Math.abs(b)-Math.abs(a))[0];
+      }
+    }
+  }
+  let best=0; row.forEach(c=>{ const n=parseMoney(c); if(!isNaN(n) && Math.abs(n)>Math.abs(best)) best=n; });
+  return best||0;
+}
 
-/* ---------- CONSOLIDATION PAR DATE (clé du correctif) ---------- */
+// 2) Parser Stellair (horodaté)
+function parseStellair(rows, fileName){
+  // header est à rows[0]
+  const header = rows[0].map(x=>String(x||'').trim());
+  const idxDate = header.findIndex(h=>/date.+cr[eé]ation/i.test(h));
+  const idxPaid = header.findIndex(h=>/pay[eé]\s*total/i.test(h));
+  const idxSoins= header.findIndex(h=>/date\s*des\s*soins/i.test(h));
+  if(idxDate===-1 || idxPaid===-1){
+    debugLog('⚠️ Stellair: colonnes manquantes'); return [];
+  }
+  const evts=[];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i]; if(!row||!row.length) continue;
+    const rawDate=row[idxDate]; const rawPaid=row[idxPaid];
+    if(!rawDate) continue;
+    const dateStr = formatDate(rawDate); if(!dateStr) continue;
+
+    // Extraire heure
+    let hr = null;
+    const m = String(rawDate).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if(m) hr = parseInt(m[1],10);
+
+    const amount = parseMoney(rawPaid);
+    if(!isNaN(amount) && amount!==0){
+      evts.push({date:dateStr, heure:hr, slot:slotFromHour(hr), amount, source:fileName});
+    }
+  }
+  return evts;
+}
+
+/* ===================== CONSOLIDATION & ANALYSE ===================== */
 function consolidateByDate(rows){
   const map=new Map();
   rows.forEach(r=>{
     const k=r.date;
     if(!map.has(k)){
-      map.set(k,{
-        date:k,
-        sources:new Set(),
-        codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0},
-        nbActes:0,
-        forfait:0,
-        totalJour:0
-      });
+      map.set(k,{date:k, sources:new Set(), codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:0, totalJour:0});
     }
     const g=map.get(k);
     g.sources.add(r.source);
     for(const c of Object.keys(g.codeCounts)){ g.codeCounts[c] += (r.codeCounts[c]||0); }
     g.nbActes += r.nbActes||0;
     g.forfait += r.forfait||0;
-    g.totalJour += r.totalJour||0; // somme brute (forfait + codes du jour)
+    g.totalJour += r.totalJour||0;
   });
 
-  // Recalcule le total à partir des tarifs actuels pour être sûr
-  const tarifs=getTarifs();
-  return [...map.values()].map(g=>{
-    let codesTotal=0;
-    for(const c of Object.keys(g.codeCounts)){ codesTotal += g.codeCounts[c]*(tarifs[c]||0); }
-    const total = Math.round((g.forfait + codesTotal)*100)/100;
-    return {
-      date:g.date,
-      source:[...g.sources].join(' + '),
-      codeCounts:g.codeCounts,
-      nbActes:g.nbActes,
-      forfait:Math.round(g.forfait*100)/100,
-      majorations:codesTotal,
-      totalJour:total
-    };
+  // Ajouter les événements Stellair (agrégés par date)
+  const dayEvts=new Map();
+  eventRows.forEach(ev=>{
+    if(!dayEvts.has(ev.date)) dayEvts.set(ev.date,0);
+    dayEvts.set(ev.date, dayEvts.get(ev.date)+ (ev.amount||0));
   });
+  const tarifs=getTarifs();
+  const out=[];
+  // intègre les dates issues rows
+  map.forEach((g)=>{
+    const extra = dayEvts.get(g.date)||0;
+    const recomputeCodes = Object.keys(g.codeCounts).reduce((s,k)=>s + g.codeCounts[k]*(tarifs[k]||0),0);
+    const total = Math.round((g.forfait + recomputeCodes + extra)*100)/100;
+    out.push({
+      date:g.date, source:[...g.sources].join(' + ') + (extra? ' + Stellair':''),
+      codeCounts:g.codeCounts, nbActes:g.nbActes,
+      forfait:Math.round(g.forfait*100)/100, majorations:recomputeCodes + extra, totalJour:total
+    });
+    dayEvts.delete(g.date);
+  });
+  // intègre les dates uniquement Stellair
+  dayEvts.forEach((val, d)=>{
+    out.push({
+      date:d, source:'Stellair', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0},
+      nbActes:0, forfait:0, majorations:val, totalJour:Math.round(val*100)/100
+    });
+  });
+  return out;
 }
 
-/* ---------- UI compute ---------- */
 function updateFileList(){
   const box=document.getElementById('fileList');
   if(loadedFiles.length===0){ box.innerHTML=''; document.getElementById('totalSummary').innerHTML=''; return; }
   let html='<div class="file-list">';
   loadedFiles.forEach((f,i)=>{
-    html+=`<div class="file-item">
-      <div class="file-info">
-        <div class="file-name">📄 ${f.name}</div>
-        <div class="file-stats">${f.nbGardes} lignes • ${f.totalMontant.toFixed(2)}€</div>
-      </div>
-      <button class="btn-remove" onclick="removeFile(${i})">🗑️ Retirer</button>
-    </div>`;
+    html+=`<div class="file-item"><div class="file-info"><div class="file-name">📄 ${f.name}</div><div class="file-stats">${f.nbGardes} lignes • ${f.totalMontant.toFixed(2)}€</div></div><button class="btn-remove" onclick="removeFile(${i})">🗑️ Retirer</button></div>`;
   });
-  html+='</div>';
-  box.innerHTML=html;
-
+  html+='</div>'; box.innerHTML=html;
   const totalRows=loadedFiles.reduce((s,f)=>s+f.nbGardes,0);
   const totalMontant=loadedFiles.reduce((s,f)=>s+f.totalMontant,0);
-  document.getElementById('totalSummary').innerHTML=
-    `<div class="total-summary">✅ Total: ${totalRows} lignes importées • ${totalMontant.toFixed(2)}€</div>`;
+  document.getElementById('totalSummary').innerHTML=`<div class="total-summary">✅ Total: ${totalRows} lignes importées • ${totalMontant.toFixed(2)}€</div>`;
 }
 
 function removeFile(i){
   const removed=loadedFiles[i];
+  // Nettoyage: on supprime les lignes associées à la source
   allGardes = allGardes.filter(g=>!g.source.includes(removed.name));
+  eventRows = eventRows.filter(e=>e.source!==removed.name);
   loadedFiles.splice(i,1);
   updateFileList();
   analyseData();
 }
 
 function analyseData(){
-  if(allGardes.length===0){
+  if(allGardes.length===0 && eventRows.length===0){
     document.getElementById('tableBody').innerHTML=`<tr><td colspan="14" style="text-align:center;padding:40px;color:#6c757d;">Aucune donnée</td></tr>`;
     ['statNbJours','statFactures','statCotations','statGardes','statCombine','statTop60','statTop60Moy','statExon','statHorsTop'].forEach(id=>document.getElementById(id).textContent='0');
     return;
   }
-
-  // 👉 Fusionne d'abord toutes les lignes par DATE
   const merged = consolidateByDate(allGardes);
-
-  const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
-  document.getElementById('lblTopN').textContent=topN;
-
-  // Tri par montant décroissant
+  const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60'))); document.getElementById('lblTopN').textContent=topN;
   const sorted=[...merged].sort((a,b)=>b.totalJour-a.totalJour);
 
   const nbJours=sorted.length;
@@ -553,8 +735,7 @@ function analyseData(){
   const topMoy=topTotal/Math.min(topN,nbJours);
   const reste=totalCombine-topTotal;
 
-  const totals={CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0};
-  let totalActes=0;
+  const totals={CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}; let totalActes=0;
   sorted.forEach(g=>{
     totals.CRN+=g.codeCounts.CRN||0; totals.CRM+=g.codeCounts.CRM||0; totals.CRD+=g.codeCounts.CRD||0;
     totals.VRN+=g.codeCounts.VRN||0; totals.VRM+=g.codeCounts.VRM||0; totals.VRD+=g.codeCounts.VRD||0;
@@ -562,11 +743,9 @@ function analyseData(){
   });
   const totalCodesCount=Object.values(totals).reduce((s,c)=>s+c,0);
 
-  // Stats
   document.getElementById('statNbJours').textContent=nbJours;
   document.getElementById('statFactures').textContent=totalCodesCount;
-  document.getElementById('statFacturesCodes').textContent=
-    `CRN:${totals.CRN} CRM:${totals.CRM} CRD:${totals.CRD} VRN:${totals.VRN} VRM:${totals.VRM} VRD:${totals.VRD}`;
+  document.getElementById('statFacturesCodes').textContent=`CRN:${totals.CRN} CRM:${totals.CRM} CRD:${totals.CRD} VRN:${totals.VRN} VRM:${totals.VRM} VRD:${totals.VRD}`;
   document.getElementById('statCotations').textContent=`${totals.CRN+totals.CRM+totals.CRD}`;
   document.getElementById('statGardes').textContent=`${totals.VRN+totals.VRM+totals.VRD}`;
   document.getElementById('statCombine').textContent=`${totalCombine.toFixed(2)} €`;
@@ -576,25 +755,19 @@ function analyseData(){
   document.getElementById('statHorsTop').textContent=`${reste.toFixed(2)} €`;
 
   updateTable(sorted, topN);
+  rebuildWeekdayAnalytics(sorted);
+  rebuildTopCreneaux(); // basé sur eventRows
 }
 
 function updateTable(gardes, topN){
-  const tbody=document.getElementById('tableBody');
-  let html=''; let cumul=0;
+  const tbody=document.getElementById('tableBody'); let html=''; let cumul=0;
   gardes.forEach((g,i)=>{
-    cumul+=g.totalJour;
-    const inTop=i<topN;
+    cumul+=g.totalJour; const inTop=i<topN;
     html+=`<tr class="${inTop?'highlight-row':''}">
-      <td>${i+1}</td>
-      <td>${g.date}</td>
-      <td>${g.source}</td>
+      <td>${i+1}</td><td>${g.date}</td><td>${g.source}</td>
       <td><strong>${g.nbActes||0}</strong></td>
-      <td>${g.codeCounts.CRN||'-'}</td>
-      <td>${g.codeCounts.CRM||'-'}</td>
-      <td>${g.codeCounts.CRD||'-'}</td>
-      <td>${g.codeCounts.VRN||'-'}</td>
-      <td>${g.codeCounts.VRM||'-'}</td>
-      <td>${g.codeCounts.VRD||'-'}</td>
+      <td>${g.codeCounts.CRN||'-'}</td><td>${g.codeCounts.CRM||'-'}</td><td>${g.codeCounts.CRD||'-'}</td>
+      <td>${g.codeCounts.VRN||'-'}</td><td>${g.codeCounts.VRM||'-'}</td><td>${g.codeCounts.VRD||'-'}</td>
       <td>${(g.forfait||0).toFixed(2)} €</td>
       <td><strong>${g.totalJour.toFixed(2)} €</strong></td>
       <td>${cumul.toFixed(2)} €</td>
@@ -604,26 +777,140 @@ function updateTable(gardes, topN){
   tbody.innerHTML=html;
 }
 
-/* ---------- Exemple & Export (utilisent les données fusionnées) ---------- */
-function loadExample(){
-  const tarifs=getTarifs();
-  allGardes=[
-    // actes 07/07
-    {date:'07/07/2025', source:'Actes.xlsx', codeCounts:{CRN:3,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:4, forfait:0, majorations:3*tarifs.CRN+tarifs.CRM, totalJour:3*tarifs.CRN+tarifs.CRM},
-    // astreinte 07/07
-    {date:'07/07/2025', source:'CPAM_Juillet.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:60, majorations:0, totalJour:60},
-    // autre jour
-    {date:'08/07/2025', source:'Actes.xlsx', codeCounts:{CRN:1,CRM:0,CRD:0,VRN:1,VRM:0,VRD:0}, nbActes:2, forfait:0, majorations:tarifs.CRN+tarifs.VRN, totalJour:tarifs.CRN+tarifs.VRN}
-  ];
-  loadedFiles=[{name:'Exemple', nbGardes:allGardes.length, totalMontant:allGardes.reduce((s,g)=>s+g.totalJour,0)}];
-  updateFileList(); analyseData();
+/* ===================== ANALYSE SEMAINE / FÉRIÉS / VACANCES ===================== */
+const WEEKDAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+function rebuildWeekdayAnalytics(mergedInput=null){
+  const merged = mergedInput || consolidateByDate(allGardes);
+  if(!merged.length){
+    document.getElementById('weekdayTableBody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">Aucune donnée</td></tr>`;
+    ['wkAllAvg','wkWEAvg','wkHolAvg'].forEach(id=>document.getElementById(id).textContent='0 €');
+    document.getElementById('wkTypeBody').innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>`;
+    return;
+  }
+
+  // Flags week-end / fériés / vacances
+  const years = Array.from(new Set(merged.map(x=>parseInt(x.date.split('/')[2],10))));
+  const hol = new Set(); years.forEach(y=> frenchHolidays(y).forEach(d=>hol.add(d)));
+  const enrich = merged.map(g=>{
+    const wd = weekdayShort(g.date);
+    const we = isWeekend(g.date);
+    const isHol = hol.has(g.date);
+    const vac = isVacation(g.date,'ALL');
+    return {...g, wd, isWeekend:we, isHoliday:isHol, isVacation:vac};
+  });
+
+  // Indicateurs simples
+  const allAvg = enrich.reduce((s,g)=>s+g.totalJour,0)/enrich.length;
+  const weDays = enrich.filter(g=>g.isWeekend);
+  const holDays= enrich.filter(g=>g.isHoliday);
+  const weAvg  = weDays.length ? weDays.reduce((s,g)=>s+g.totalJour,0)/weDays.length : 0;
+  const holAvg = holDays.length? holDays.reduce((s,g)=>s+g.totalJour,0)/holDays.length : 0;
+  document.getElementById('wkAllAvg').textContent = `${allAvg.toFixed(2)} €`;
+  document.getElementById('wkWEAvg').textContent  = `${weAvg.toFixed(2)} €`;
+  document.getElementById('wkHolAvg').textContent = `${holAvg.toFixed(2)} €`;
+
+  // Tableau Lun..Dim
+  const byWd = {};
+  WEEKDAYS.forEach(k=>byWd[k]={days:[], total:0});
+  enrich.forEach(g=>{ byWd[g.wd].days.push(g); byWd[g.wd].total += g.totalJour; });
+
+  let html=''; WEEKDAYS.forEach(k=>{
+    const arr = byWd[k].days;
+    if(!arr.length){ html+=`<tr><td>${k}</td><td>0</td><td>0 €</td><td>0 €</td><td>0 €</td><td>—</td></tr>`; return; }
+    const vals = arr.map(x=>x.totalJour).sort((a,b)=>a-b);
+    const total = byWd[k].total;
+    const avg = total/arr.length;
+    const med = vals.length%2 ? vals[(vals.length-1)/2] : (vals[vals.length/2-1]+vals[vals.length/2])/2;
+    const top3 = [...arr].sort((a,b)=>b.totalJour-a.totalJour).slice(0,3).map(x=>x.date).join(', ');
+    html += `<tr><td>${k}</td><td>${arr.length}</td><td>${total.toFixed(2)} €</td><td>${avg.toFixed(2)} €</td><td>${med.toFixed(2)} €</td><td>${top3}</td></tr>`;
+  });
+  document.getElementById('weekdayTableBody').innerHTML = html;
+
+  // Tableau type (Férié / WE / Semaine) × (Vacances/Hors)
+  function baseType(r){ return r.isHoliday ? 'Férié' : (r.isWeekend ? 'Week-end' : 'Semaine'); }
+  const buckets={};
+  enrich.forEach(r=>{
+    const key = baseType(r) + ' — ' + (r.isVacation?'Vacances':'Hors vacances');
+    if(!buckets[key]) buckets[key]=[];
+    buckets[key].push(r.totalJour);
+  });
+  let body='';
+  Object.keys(buckets).forEach(k=>{
+    const arr=buckets[k].slice().sort((a,b)=>a-b);
+    const nb=arr.length, tot=arr.reduce((s,v)=>s+v,0), avg=tot/nb;
+    const med = nb%2 ? arr[(nb-1)/2] : (arr[nb/2-1]+arr[nb/2])/2;
+    body += `<tr><td>${k}</td><td>${nb}</td><td>${tot.toFixed(2)} €</td><td>${avg.toFixed(2)} €</td><td>${med.toFixed(2)} €</td></tr>`;
+  });
+  if(!body) body=`<tr><td colspan="5" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>`;
+  document.getElementById('wkTypeBody').innerHTML = body;
 }
 
-function exportToExcel(){
-  if(allGardes.length===0){ alert('Aucune donnée à exporter'); return; }
-  const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
+/* ===================== TOP CRENEAUX (via eventRows) ===================== */
+function rebuildTopCreneaux(){
+  const topAvgBody=document.getElementById('topAvgBody');
+  const topTotalBody=document.getElementById('topTotalBody');
+  if(!eventRows.length){
+    topAvgBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">Aucun export Stellair horodaté chargé</td></tr>`;
+    topTotalBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>`;
+    return;
+  }
+  // Flags
+  const years = Array.from(new Set(eventRows.map(x=>parseInt(x.date.split('/')[2],10))));
+  const hol = new Set(); years.forEach(y=> frenchHolidays(y).forEach(d=>hol.add(d)));
+  const rows = eventRows.map(r=>{
+    const wd = weekdayShort(r.date);
+    const we = isWeekend(r.date);
+    const isHol = hol.has(r.date);
+    const vac = isVacation(r.date,'ALL');
+    const typeBase = isHol ? 'Férié' : (we ? 'Week-end':'Semaine');
+    const cluster = `${wd} — ${r.slot} — ${typeBase} — ${vac?'Vacances':'Hors vacances'}`;
+    return {...r, wd, isWeekend:we, isHoliday:isHol, isVacation:vac, typeBase, cluster};
+  });
+  // agrégation par date-slot pour normaliser au "jour-slot"
+  const daySlotMap=new Map(); // key: date|slot|type|vac -> sum
+  rows.forEach(r=>{
+    const key = `${r.date}|${r.slot}|${r.typeBase}|${r.isVacation?'1':'0'}`;
+    daySlotMap.set(key, (daySlotMap.get(key)||0)+ (r.amount||0));
+  });
+  // Regroupe par cluster
+  const clusters={}; let totalAll=0;
+  daySlotMap.forEach((val,key)=>{
+    const [d,slot,typeBase,vac] = key.split('|');
+    const wd = weekdayShort(d);
+    const cluster = `${wd} — ${slot} — ${typeBase} — ${vac==='1'?'Vacances':'Hors vacances'}`;
+    if(!clusters[cluster]) clusters[cluster]=[];
+    clusters[cluster].push(val);
+    totalAll += val;
+  });
 
-  // Exporte les données FUSIONNÉES par date
+  const arr=[]; Object.keys(clusters).forEach(k=>{
+    const vals=clusters[k].slice().sort((a,b)=>a-b);
+    const nb=vals.length, tot=vals.reduce((s,v)=>s+v,0), avg=tot/nb;
+    const med = nb%2 ? vals[(nb-1)/2] : (vals[nb/2-1]+vals[nb/2])/2;
+    arr.push({cluster:k, nb, tot, avg, med});
+  });
+
+  const byAvg = arr.slice().sort((a,b)=>b.avg-a.avg).slice(0,15);
+  const byTot = arr.slice().sort((a,b)=>b.tot-a.tot).slice(0,15);
+
+  let htmlAvg=''; byAvg.forEach(r=>{
+    htmlAvg += `<tr><td>${r.cluster}</td><td>${r.nb}</td><td>${r.tot.toFixed(2)} €</td><td>${r.avg.toFixed(2)} €</td><td>${r.med.toFixed(2)} €</td><td>${(r.tot*100/totalAll).toFixed(2)}%</td></tr>`;
+  });
+  if(!htmlAvg) htmlAvg=`<tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>`;
+  topAvgBody.innerHTML = htmlAvg;
+
+  let htmlTot=''; byTot.forEach(r=>{
+    htmlTot += `<tr><td>${r.cluster}</td><td>${r.nb}</td><td>${r.tot.toFixed(2)} €</td><td>${r.avg.toFixed(2)} €</td><td>${r.med.toFixed(2)} €</td><td>${(r.tot*100/totalAll).toFixed(2)}%</td></tr>`;
+  });
+  if(!htmlTot) htmlTot=`<tr><td colspan="6" style="text-align:center;padding:24px;color:#6c757d;">—</td></tr>`;
+  topTotalBody.innerHTML = htmlTot;
+}
+
+/* ===================== EXPORT EXCEL ===================== */
+function exportToExcel(){
+  if(allGardes.length===0 && eventRows.length===0){ alert('Aucune donnée à exporter'); return; }
+  const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
   const merged = consolidateByDate(allGardes);
   const sorted=[...merged].sort((a,b)=>b.totalJour-a.totalJour);
 
@@ -645,7 +932,6 @@ function exportToExcel(){
     [],
     ['Statistiques Globales'],
     ['Nombre de jours', sorted.length],
-    ['Total actes', sorted.reduce((s,g)=>s+(g.nbActes||0),0)],
     ['Total combiné', totalCombine.toFixed(2)+' €'],
     ['TOP '+topN+' (exonération possible)', topTotal.toFixed(2)+' €'],
     ['Reste imposable (hors TOP '+topN+')', reste.toFixed(2)+' €'],
@@ -654,26 +940,85 @@ function exportToExcel(){
     ['Rang','Date','Source(s)','Nb actes','CRN','CRM','CRD','VRN','VRM','VRD','Forfait (€)','Total Jour (€)','Dans TOP '+topN]
   ];
   sorted.forEach((g,i)=>{
-    excelData.push([
-      i+1,g.date,g.source,g.nbActes||0,
-      g.codeCounts.CRN||0,g.codeCounts.CRM||0,g.codeCounts.CRD||0,
-      g.codeCounts.VRN||0,g.codeCounts.VRM||0,g.codeCounts.VRD||0,
-      (g.forfait||0).toFixed(2),
-      g.totalJour.toFixed(2),
-      i<topN?'OUI':'NON'
-    ]);
+    excelData.push([i+1,g.date,g.source,g.nbActes||0,g.codeCounts.CRN||0,g.codeCounts.CRM||0,g.codeCounts.CRD||0,g.codeCounts.VRN||0,g.codeCounts.VRM||0,g.codeCounts.VRD||0,(g.forfait||0).toFixed(2),g.totalJour.toFixed(2), i<topN?'OUI':'NON']);
   });
 
+  // TOP créneaux → on ajoute deux onglets si des events existent
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet(excelData);
-  XLSX.utils.book_append_sheet(wb,ws,'Analyse PDSA');
-  const date=new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb,`Analyse_PDSA_${date}.xlsx`);
+  const wsMain=XLSX.utils.aoa_to_sheet(excelData);
+  XLSX.utils.book_append_sheet(wb,wsMain,'Analyse PDSA');
+
+  if(eventRows.length){
+    // Reconstruire clusters comme dans l’écran
+    const years = Array.from(new Set(eventRows.map(x=>parseInt(x.date.split('/')[2],10))));
+    const hol = new Set(); years.forEach(y=> frenchHolidays(y).forEach(d=>hol.add(d)));
+    const rows = eventRows.map(r=>{
+      const wd = weekdayShort(r.date);
+      const we = isWeekend(r.date);
+      const isHol = hol.has(r.date);
+      const vac = isVacation(r.date,'ALL');
+      const typeBase = isHol ? 'Férié' : (we ? 'Week-end':'Semaine');
+      const cluster = `${wd} — ${r.slot} — ${typeBase} — ${vac?'Vacances':'Hors vacances'}`;
+      return {...r, wd, isWeekend:we, isHoliday:isHol, isVacation:vac, typeBase, cluster};
+    });
+    const daySlotMap=new Map();
+    rows.forEach(r=>{
+      const key = `${r.date}|${r.slot}|${r.typeBase}|${r.isVacation?'1':'0'}`;
+      daySlotMap.set(key, (daySlotMap.get(key)||0)+ (r.amount||0));
+    });
+    const clusters={}; let totalAll=0;
+    daySlotMap.forEach((val,key)=>{
+      const [d,slot,typeBase,vac] = key.split('|');
+      const wd = weekdayShort(d);
+      const c = `${wd} — ${slot} — ${typeBase} — ${vac==='1'?'Vacances':'Hors vacances'}`;
+      if(!clusters[c]) clusters[c]=[];
+      clusters[c].push(val);
+      totalAll += val;
+    });
+    const arr=[]; Object.keys(clusters).forEach(k=>{
+      const vals=clusters[k].slice().sort((a,b)=>a-b);
+      const nb=vals.length, tot=vals.reduce((s,v)=>s+v,0), avg=tot/nb;
+      const med = nb%2 ? vals[(nb-1)/2] : (vals[nb/2-1]+vals[nb/2])/2;
+      arr.push({cluster:k, occ:nb, total:tot, moy:avg, med:med, part:(tot*100/totalAll)});
+    });
+
+    const topAvg = [['Cluster','Occur.','CA total','CA moyen','Médiane','Part %']];
+    arr.slice().sort((a,b)=>b.moy-a.moy).slice(0,15).forEach(r=> topAvg.push([r.cluster,r.occ,r.total,r.moy,r.med, r.part]));
+    const topTot = [['Cluster','Occur.','CA total','CA moyen','Médiane','Part %']];
+    arr.slice().sort((a,b)=>b.total-a.total).slice(0,15).forEach(r=> topTot.push([r.cluster,r.occ,r.total,r.moy,r.med, r.part]));
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(topAvg),'Top moyennes');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(topTot),'Top totaux');
+  }
+
+  const dateStr=new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb,`Analyse_PDSA_${dateStr}.xlsx`);
 }
 
-/* ---------- Recalcul live ---------- */
+/* ===================== EXEMPLE ===================== */
+function loadExample(){
+  const t=getTarifs();
+  // Exemples "actes/astreintes"
+  allGardes = [
+    {date:'07/07/2025', source:'Actes.xlsx', codeCounts:{CRN:3,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:4, forfait:0, majorations:3*t.CRN+t.CRM, totalJour:3*t.CRN+t.CRM},
+    {date:'07/07/2025', source:'CPAM_Juillet.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:60, majorations:0, totalJour:60},
+    {date:'08/07/2025', source:'Actes.xlsx', codeCounts:{CRN:1,CRM:0,CRD:0,VRN:1,VRM:0,VRD:0}, nbActes:2, forfait:0, majorations:t.CRN+t.VRN, totalJour:t.CRN+t.VRN}
+  ];
+  // Exemples Stellair horodatés
+  eventRows = [
+    {date:'07/07/2025', heure:21, slot:slotFromHour(21), amount:120, source:'Stellair.csv'},
+    {date:'07/07/2025', heure:22, slot:slotFromHour(22), amount:80, source:'Stellair.csv'},
+    {date:'08/07/2025', heure:10, slot:slotFromHour(10), amount:90, source:'Stellair.csv'},
+    {date:'08/07/2025', heure:19, slot:slotFromHour(19), amount:150, source:'Stellair.csv'}
+  ];
+  loadedFiles=[{name:'Exemple', nbGardes:allGardes.length+eventRows.length, totalMontant:allGardes.reduce((s,g)=>s+g.totalJour,0) + eventRows.reduce((s,r)=>s+r.amount,0)}];
+  updateFileList();
+  analyseData();
+}
+
+/* ===================== RECALCUL LIVE ===================== */
 document.querySelectorAll('.tarif-field, #topN').forEach(inp=>{
-  inp.addEventListener('change',()=>{ if(allGardes.length>0) analyseData(); });
+  inp.addEventListener('change',()=>{ if(allGardes.length>0 || eventRows.length>0) analyseData(); });
 });
 </script>
 </body>
