@@ -146,7 +146,7 @@
         <table id="detailTable">
           <thead>
           <tr>
-            <th>Rang</th><th>Date</th><th>Source</th><th>Nb actes</th>
+            <th>Rang</th><th>Date</th><th>Source(s)</th><th>Nb actes</th>
             <th>CRN</th><th>CRM</th><th>CRD</th>
             <th>VRN</th><th>VRM</th><th>VRD</th>
             <th>Forfait CPAM</th>
@@ -163,7 +163,7 @@
 </div>
 
 <script>
-let allGardes = [];
+let allGardes = [];      // sorties "par fichier"
 let loadedFiles = [];
 let debugMode = false;
 
@@ -266,7 +266,7 @@ function parseCSVValue(v){
   return (!isNaN(n) && n.trim()!=='') ? parseFloat(n) : v;
 }
 
-/* ---------- Helpers (dates / montants / détection astreinte) ---------- */
+/* ---------- Helpers (dates / montants / astreinte) ---------- */
 function parseMoney(val){
   if(val===null||val===undefined) return 0;
   if(typeof val==='number') return val;
@@ -369,9 +369,8 @@ function getTarifs(){
   };
 }
 
-/* ---------- Parsing mixte (actes + paiements CPAM astreintes PRD/PRN/PRM) ---------- */
+/* ---------- Parsing mixte (actes + paiements CPAM PRD/PRN/PRM) ---------- */
 function parseExcelData(data,fileName){
-  debugLog(`🔍 Parsing ${fileName}...`);
   const tarifs=getTarifs();
 
   // 1) en-tête
@@ -385,7 +384,7 @@ function parseExcelData(data,fileName){
   }
   if(!headerRow){ headerIndex=0; headerRow=data[0]||[]; }
 
-  // 2) colonne date (souvent "Date de paiement")
+  // 2) colonne date (ex. "Date de paiement")
   let dateCol=-1;
   for(let j=0;j<headerRow.length;j++){
     const cell=headerRow[j];
@@ -399,68 +398,105 @@ function parseExcelData(data,fileName){
   };
 
   const dateGroups={};
-  let astreinteLines=0;
-
   for(let i=headerIndex+1;i<data.length;i++){
     const row=data[i];
     if(!row || row.length===0) continue;
 
-    // date (prend "Date de paiement" si présent, sinon toute date trouvée)
+    // date
     let date=findDateInRow(row, dateCol);
     if(!date) date=`Jour ${i-headerIndex}`;
 
     if(!dateGroups[date]){
-      dateGroups[date]={date, source:fileName, codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, forfait:0};
+      dateGroups[date]={date, sources:new Set(), codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, forfait:0, nbActes:0};
     }
+    dateGroups[date].sources.add(fileName);
 
-    // Lignes astreinte (ASTREINTE J FERIE PRD / NUIT PRN / MI NUIT PRM, etc.)
+    // astreintes CPAM
     if(rowContainsAstreinte(row)){
       const montant=findAmountInRow(row, headerRow);
       if(!isNaN(montant) && montant!==0){
         dateGroups[date].forfait += montant;
-        astreinteLines++;
-        debugLog(`➕ Astreinte PR* détectée @ ${date} : ${montant}€ (${fileName})`);
+        debugLog(`➕ Astreinte détectée @ ${date} : ${montant}€ (${fileName})`);
       }
     }
 
-    // Comptage des codes CR*/VR* (si tes exports d'actes sont mélangés)
+    // comptage des codes (actes/majorations)
     for(let j=0;j<row.length;j++){
       if(j===dateCol) continue;
       const cell=row[j]; if(!cell) continue;
       const s=String(cell).toUpperCase();
       for(const c of codes){
         const m=s.match(regexMap[c]);
-        if(m) dateGroups[date].codeCounts[c]+=m.length;
+        if(m){
+          dateGroups[date].codeCounts[c]+=m.length;
+          dateGroups[date].nbActes+=m.length;
+        }
       }
     }
   }
 
-  // 3) dictionnaire → tableau de jours
+  // 3) dictionnaire → tableau (par fichier, encore — on consolidera plus loin)
   const gardes=[];
   for(const d in dateGroups){
     const g=dateGroups[d];
-    let totalCodes=0, nbActes=0, details=[];
-    for(const c of codes){
-      const n=g.codeCounts[c]||0;
-      if(n>0){
-        totalCodes += n * (tarifs[c]||0);
-        nbActes += n;
-        details.push(`${n}×${c}(${tarifs[c]||0}€)`);
-      }
-    }
+    let totalCodes=0;
+    for(const c of codes){ totalCodes += g.codeCounts[c]*(getTarifs()[c]||0); }
     const totalJour=Math.round((g.forfait + totalCodes)*100)/100;
+
     if(totalJour>0 || g.forfait!==0){
       gardes.push({
-        date:g.date, source:g.source, codeCounts:{...g.codeCounts},
-        nbActes, forfait:Math.round(g.forfait*100)/100,
-        majorations:totalCodes, totalJour,
-        details:[...details,(g.forfait?`Forfait:${g.forfait}€`:null)].filter(Boolean).join(' + ')
+        date:d,
+        source:[...g.sources].join(' + '), // trace des sources
+        codeCounts:{...g.codeCounts},
+        nbActes:g.nbActes,
+        forfait:Math.round(g.forfait*100)/100,
+        majorations:totalCodes,
+        totalJour
       });
     }
   }
-
-  debugLog(`✅ ${gardes.length} jours extraits • ${astreinteLines} ligne(s) d’astreinte PRD/PRN/PRM détectée(s)`);
   return gardes;
+}
+
+/* ---------- CONSOLIDATION PAR DATE (clé du correctif) ---------- */
+function consolidateByDate(rows){
+  const map=new Map();
+  rows.forEach(r=>{
+    const k=r.date;
+    if(!map.has(k)){
+      map.set(k,{
+        date:k,
+        sources:new Set(),
+        codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0},
+        nbActes:0,
+        forfait:0,
+        totalJour:0
+      });
+    }
+    const g=map.get(k);
+    g.sources.add(r.source);
+    for(const c of Object.keys(g.codeCounts)){ g.codeCounts[c] += (r.codeCounts[c]||0); }
+    g.nbActes += r.nbActes||0;
+    g.forfait += r.forfait||0;
+    g.totalJour += r.totalJour||0; // somme brute (forfait + codes du jour)
+  });
+
+  // Recalcule le total à partir des tarifs actuels pour être sûr
+  const tarifs=getTarifs();
+  return [...map.values()].map(g=>{
+    let codesTotal=0;
+    for(const c of Object.keys(g.codeCounts)){ codesTotal += g.codeCounts[c]*(tarifs[c]||0); }
+    const total = Math.round((g.forfait + codesTotal)*100)/100;
+    return {
+      date:g.date,
+      source:[...g.sources].join(' + '),
+      codeCounts:g.codeCounts,
+      nbActes:g.nbActes,
+      forfait:Math.round(g.forfait*100)/100,
+      majorations:codesTotal,
+      totalJour:total
+    };
+  });
 }
 
 /* ---------- UI compute ---------- */
@@ -472,7 +508,7 @@ function updateFileList(){
     html+=`<div class="file-item">
       <div class="file-info">
         <div class="file-name">📄 ${f.name}</div>
-        <div class="file-stats">${f.nbGardes} gardes • ${f.totalMontant.toFixed(2)}€</div>
+        <div class="file-stats">${f.nbGardes} lignes • ${f.totalMontant.toFixed(2)}€</div>
       </div>
       <button class="btn-remove" onclick="removeFile(${i})">🗑️ Retirer</button>
     </div>`;
@@ -480,15 +516,15 @@ function updateFileList(){
   html+='</div>';
   box.innerHTML=html;
 
-  const totalGardes=loadedFiles.reduce((s,f)=>s+f.nbGardes,0);
+  const totalRows=loadedFiles.reduce((s,f)=>s+f.nbGardes,0);
   const totalMontant=loadedFiles.reduce((s,f)=>s+f.totalMontant,0);
   document.getElementById('totalSummary').innerHTML=
-    `<div class="total-summary">✅ Total: ${totalGardes} gardes • ${totalMontant.toFixed(2)}€</div>`;
+    `<div class="total-summary">✅ Total: ${totalRows} lignes importées • ${totalMontant.toFixed(2)}€</div>`;
 }
 
 function removeFile(i){
   const removed=loadedFiles[i];
-  allGardes = allGardes.filter(g=>g.source!==removed.name);
+  allGardes = allGardes.filter(g=>!g.source.includes(removed.name));
   loadedFiles.splice(i,1);
   updateFileList();
   analyseData();
@@ -500,9 +536,15 @@ function analyseData(){
     ['statNbJours','statFactures','statCotations','statGardes','statCombine','statTop60','statTop60Moy','statExon','statHorsTop'].forEach(id=>document.getElementById(id).textContent='0');
     return;
   }
-  const sorted=[...allGardes].sort((a,b)=>b.totalJour-a.totalJour);
+
+  // 👉 Fusionne d'abord toutes les lignes par DATE
+  const merged = consolidateByDate(allGardes);
+
   const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
   document.getElementById('lblTopN').textContent=topN;
+
+  // Tri par montant décroissant
+  const sorted=[...merged].sort((a,b)=>b.totalJour-a.totalJour);
 
   const nbJours=sorted.length;
   const totalCombine=sorted.reduce((s,g)=>s+g.totalJour,0);
@@ -562,28 +604,29 @@ function updateTable(gardes, topN){
   tbody.innerHTML=html;
 }
 
-/* ---------- Exemple & Export ---------- */
+/* ---------- Exemple & Export (utilisent les données fusionnées) ---------- */
 function loadExample(){
-  const ex=[];
-  const dates=['10/08/2025','11/08/2025','12/08/2025','16/08/2025','17/08/2025','20/08/2025','21/08/2025','25/08/2025','26/08/2025'];
   const tarifs=getTarifs();
-  // Simule des lignes CPAM ASTREINTE PRN/PRM/PRD (RO: 60/120/180€)
-  dates.forEach((d,idx)=>{
-    const ro=[180,60,60,120,240,120,60,60,60][idx];
-    ex.push({date:d, source:'CPAM_Aout.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:ro, majorations:0, totalJour:ro});
-  });
-  // Ajoute quelques actes un autre jour
-  ex.push({date:'15/08/2025', source:'Actes.xlsx', codeCounts:{CRN:2,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:3, forfait:0,
-           majorations:2*tarifs.CRN+1*tarifs.CRM, totalJour:Math.round((2*tarifs.CRN+1*tarifs.CRM)*100)/100});
-  allGardes=ex;
-  loadedFiles=[{name:'Exemple', nbGardes:ex.length, totalMontant:ex.reduce((s,g)=>s+g.totalJour,0)}];
+  allGardes=[
+    // actes 07/07
+    {date:'07/07/2025', source:'Actes.xlsx', codeCounts:{CRN:3,CRM:1,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:4, forfait:0, majorations:3*tarifs.CRN+tarifs.CRM, totalJour:3*tarifs.CRN+tarifs.CRM},
+    // astreinte 07/07
+    {date:'07/07/2025', source:'CPAM_Juillet.xls', codeCounts:{CRN:0,CRM:0,CRD:0,VRN:0,VRM:0,VRD:0}, nbActes:0, forfait:60, majorations:0, totalJour:60},
+    // autre jour
+    {date:'08/07/2025', source:'Actes.xlsx', codeCounts:{CRN:1,CRM:0,CRD:0,VRN:1,VRM:0,VRD:0}, nbActes:2, forfait:0, majorations:tarifs.CRN+tarifs.VRN, totalJour:tarifs.CRN+tarifs.VRN}
+  ];
+  loadedFiles=[{name:'Exemple', nbGardes:allGardes.length, totalMontant:allGardes.reduce((s,g)=>s+g.totalJour,0)}];
   updateFileList(); analyseData();
 }
 
 function exportToExcel(){
   if(allGardes.length===0){ alert('Aucune donnée à exporter'); return; }
   const topN=Math.max(1,Math.min(365,parseInt(document.getElementById('topN').value||'60')));
-  const sorted=[...allGardes].sort((a,b)=>b.totalJour-a.totalJour);
+
+  // Exporte les données FUSIONNÉES par date
+  const merged = consolidateByDate(allGardes);
+  const sorted=[...merged].sort((a,b)=>b.totalJour-a.totalJour);
+
   const totalCombine=sorted.reduce((s,g)=>s+g.totalJour,0);
   const topTotal=sorted.slice(0,topN).reduce((s,g)=>s+g.totalJour,0);
   const reste=totalCombine-topTotal;
@@ -607,8 +650,8 @@ function exportToExcel(){
     ['TOP '+topN+' (exonération possible)', topTotal.toFixed(2)+' €'],
     ['Reste imposable (hors TOP '+topN+')', reste.toFixed(2)+' €'],
     [],
-    ['Détail des jours de garde (triés par montant décroissant)'],
-    ['Rang','Date','Source','Nb actes','CRN','CRM','CRD','VRN','VRM','VRD','Forfait (€)','Total Jour (€)','Dans TOP '+topN]
+    ['Détail des jours (fusion par date, tri décroissant)'],
+    ['Rang','Date','Source(s)','Nb actes','CRN','CRM','CRD','VRN','VRM','VRD','Forfait (€)','Total Jour (€)','Dans TOP '+topN]
   ];
   sorted.forEach((g,i)=>{
     excelData.push([
